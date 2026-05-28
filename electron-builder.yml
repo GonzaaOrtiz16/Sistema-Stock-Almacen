@@ -1,0 +1,46 @@
+appId: com.almacengabriela.pos
+productName: Almacén Minimercado Gabriela
+copyright: Copyright © 2024 Almacén Gabriela
+
+directories:
+  buildResources: build      # aquí va icon.ico para el instalador
+  output: release
+
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+
+asar: true
+asarUnpack:
+  - "**/*.node"              # módulos nativos (better-sqlite3, bcrypt)
+
+# ── Windows ────────────────────────────────────────────────────────────────
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # icon: build/icon.ico    # descommentar cuando tengas el .ico (256×256)
+  publisherName: Almacén Minimercado Gabriela
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Almacén Gabriela
+  installerLanguages:
+    - es_AR
+  language: 11274            # código LCID para Español Argentina
+
+# ── Auto-update (GitHub Releases) ─────────────────────────────────────────
+# Para activar:
+# 1. Crear repositorio en GitHub
+# 2. Generar GH_TOKEN en https://github.com/settings/tokens (scope: repo)
+# 3. Agregar al .env:  GH_TOKEN=ghp_...
+# 4. Descomentar las tres líneas siguientes y completar owner/repo:
+# publish:
+#   provider: github
+#   owner: TU_USUARIO_GITHUB
+#   repo: almacen-gabriela

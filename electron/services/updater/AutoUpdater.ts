@@ -8,16 +8,9 @@ import log from '../../utils/logger'
 // 2. Crear GitHub release con el binario publicado
 // Los usuarios con la app instalada recibirán la notificación automáticamente.
 export function setupAutoUpdater(): void {
-  const hasPublishConfig = !!process.env.GH_TOKEN
-
-  if (!hasPublishConfig && process.env.NODE_ENV !== 'development') {
-    log.info('[AutoUpdater] Sin GH_TOKEN — auto-update deshabilitado')
-    return
-  }
-
   autoUpdater.logger = log
-  autoUpdater.autoDownload = false           // el usuario decide cuándo descargar
-  autoUpdater.autoInstallOnAppQuit = true    // instala al cerrar si ya se descargó
+  autoUpdater.autoDownload = false        // el usuario decide cuándo descargar
+  autoUpdater.autoInstallOnAppQuit = true // instala al cerrar si ya se descargó
 
   autoUpdater.on('checking-for-update', () => {
     log.info('[AutoUpdater] Buscando actualizaciones…')
@@ -46,8 +39,7 @@ export function setupAutoUpdater(): void {
     log.error('[AutoUpdater] Error:', err.message)
   })
 
-  // Verificar al inicio (falla silenciosamente si no hay configuración de publish)
-  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+  autoUpdater.checkForUpdates().catch((err) => {
     log.debug('[AutoUpdater] No se pudo verificar actualizaciones:', err.message)
   })
 }

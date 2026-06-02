@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ResumenPeriodo, VentaDiaria, TopProducto } from '@shared/types/reporte.types'
 import type { MetodoPago } from '@shared/types/venta.types'
-import { formatPrecio, formatFecha } from '../../utils/format'
+import { formatPrecio } from '../../utils/format'
 
 // ── Helpers de fecha ─────────────────────────────────────────────────────────
 function toISO(d: Date): string { return d.toISOString().split('T')[0] }

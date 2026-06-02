@@ -42,6 +42,8 @@ export interface Venta {
   estado: EstadoVenta
   sync_status: SyncStatus
   remote_id: string | null
+  // Solo lo completa listarPorTurno(incluirAnuladas) vía JOIN — para mostrar el cajero
+  usuario_nombre?: string
 }
 
 export interface DetalleVenta {
@@ -100,6 +102,15 @@ export interface AnulacionRequest {
 
 export interface AnulacionLocal extends AnulacionRequest {
   pin_admin: string
+}
+
+// Línea de detalle enriquecida con el nombre del producto (para "más info")
+export interface LineaVenta {
+  producto_id: number
+  nombre: string
+  cantidad: number
+  precio_unitario: number
+  subtotal: number
 }
 
 export interface ResumenTurno {

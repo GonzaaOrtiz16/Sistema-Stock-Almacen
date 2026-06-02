@@ -15,8 +15,12 @@ export function registerVentasHandlers(): void {
     return venta
   })
 
-  ipcMain.handle(IPC.VENTAS_LISTAR_TURNO, (_e, turno_id: number) => {
-    return repo.listarPorTurno(turno_id)
+  ipcMain.handle(IPC.VENTAS_LISTAR_TURNO, (_e, turno_id: number, incluirAnuladas = false) => {
+    return repo.listarPorTurno(turno_id, incluirAnuladas)
+  })
+
+  ipcMain.handle(IPC.VENTAS_DETALLE, (_e, venta_id: number) => {
+    return repo.detallePorVenta(venta_id)
   })
 
   // Usado cuando la anulación ya fue aprobada (remotamente por el admin)
@@ -46,8 +50,8 @@ export function registerVentasHandlers(): void {
   })
 
   // Cajero cancela la espera de aprobación
-  ipcMain.handle(IPC.ANULACIONES_CANCELAR_REMOTO, (_e, ventaId: number) => {
-    getAnulacionService().stopPolling(ventaId)
+  ipcMain.handle(IPC.ANULACIONES_CANCELAR_REMOTO, async (_e, ventaId: number) => {
+    await getAnulacionService().cancelar(ventaId)
     log.info(`[IPC] anulación remota cancelada venta=${ventaId}`)
   })
 }

@@ -11,52 +11,7 @@ interface Props {
   onClose: () => void
 }
 
-// ── Espera aprobación remota ─────────────────────────────────────────────────
-function WaitingApproval({
-  venta,
-  onForzarOffline,
-  onSuccess,
-  onClose,
-}: {
-  venta: Venta
-  onForzarOffline: () => void
-  onSuccess: () => void
-  onClose: () => void
-}) {
-  const [rejected, setRejected] = useState(false)
-
-  useEffect(() => {
-    const api = window.electronAPI.anulaciones
-    api.onAprobada(({ ventaId }) => { if (ventaId === venta.id) onSuccess() })
-    api.onRechazada(({ ventaId }) => { if (ventaId === venta.id) setRejected(true) })
-    return () => api.removeListeners()
-  }, [venta.id, onSuccess])
-
-  if (rejected) {
-    return (
-      <div className="anulacion-waiting">
-        <p className="pin-error">El administrador rechazó la solicitud.</p>
-        <button className="btn-ghost" onClick={onClose}>Cerrar</button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="anulacion-waiting">
-      <div className="spinner" />
-      <p>Esperando aprobación del administrador…</p>
-      <p className="anulacion-hint">
-        La solicitud fue enviada. El admin puede aprobarla desde cualquier
-        dispositivo con Supabase configurado.
-      </p>
-      <button className="btn-ghost" onClick={onForzarOffline}>
-        Usar PIN local
-      </button>
-    </div>
-  )
-}
-
-// ── PIN pad offline ──────────────────────────────────────────────────────────
+// ── PIN pad ──────────────────────────────────────────────────────────────────
 function PinOffline({
   ventaId, solicitanteId, motivo, onSuccess, onError,
 }: {
@@ -66,7 +21,7 @@ function PinOffline({
   onSuccess: () => void
   onError: (msg: string) => void
 }) {
-  const [pin, setPin]         = useState('')
+  const [pin, setPin]       = useState('')
   const [loading, setLoading] = useState(false)
   const [attempts, setAttempts] = useState(0)
   const pinRef     = useRef(pin)
@@ -85,8 +40,7 @@ function PinOffline({
       })
       onSuccess()
     } catch (err) {
-      const next = attempts + 1
-      setAttempts(next)
+      setAttempts((n) => n + 1)
       pinRef.current = ''
       setPin('')
       onError(err instanceof Error ? err.message : 'PIN incorrecto')
@@ -120,7 +74,6 @@ function PinOffline({
 
   return (
     <div className="anulacion-pin">
-      <p className="form-label" style={{ textAlign: 'center' }}>PIN del administrador</p>
       <div className="pin-dots">
         {[0, 1, 2, 3].map((i) => (
           <span key={i} className={`pin-dot${i < pin.length ? ' filled' : ''}`} />
@@ -145,10 +98,78 @@ function PinOffline({
   )
 }
 
+// ── Modo online: banner de espera + PIN simultáneos ──────────────────────────
+// El que llegue primero (email del admin o PIN en pantalla) anula la venta.
+function WaitingConPin({
+  venta, solicitanteId, motivo, onSuccess, onClose,
+}: {
+  venta: Venta
+  solicitanteId: number
+  motivo: string
+  onSuccess: () => void
+  onClose: () => void
+}) {
+  const [rejected, setRejected] = useState(false)
+  const [pinError, setPinError] = useState('')
+  const resolvedRef = useRef(false)
+
+  useEffect(() => {
+    const api = window.electronAPI.anulaciones
+    api.onAprobada(({ ventaId }) => {
+      if (ventaId === venta.id && !resolvedRef.current) {
+        resolvedRef.current = true
+        onSuccess()
+      }
+    })
+    api.onRechazada(({ ventaId }) => {
+      if (ventaId === venta.id) setRejected(true)
+    })
+    return () => api.removeListeners()
+  }, [venta.id, onSuccess])
+
+  if (rejected) {
+    return (
+      <div className="anulacion-waiting">
+        <p className="pin-error" style={{ textAlign: 'center' }}>
+          El administrador rechazó la solicitud.
+        </p>
+        <button className="btn-ghost" style={{ width: '100%', marginTop: 12 }} onClick={onClose}>
+          Cerrar
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {/* Banner: notificación enviada */}
+      <div className="anulacion-waiting-banner">
+        <div className="spinner spinner-sm" />
+        <span>Notificación enviada al administrador…</span>
+      </div>
+
+      <p className="anulacion-divider">— o ingresá el PIN acá mismo —</p>
+
+      {pinError && <p className="pin-error">{pinError}</p>}
+      <PinOffline
+        ventaId={venta.id}
+        solicitanteId={solicitanteId}
+        motivo={motivo}
+        onSuccess={() => {
+          if (resolvedRef.current) return
+          resolvedRef.current = true
+          onSuccess()
+        }}
+        onError={setPinError}
+      />
+    </div>
+  )
+}
+
 // ── Modal principal ──────────────────────────────────────────────────────────
 export default function AnulacionModal({ venta, onSuccess, onClose }: Props) {
-  const { usuario }   = useCajaStore()
-  const isOnline      = useNetworkStatus()
+  const { usuario } = useCajaStore()
+  const isOnline    = useNetworkStatus()
 
   const [motivo,       setMotivo]       = useState('')
   const [forzoOffline, setForzoOffline] = useState(false)
@@ -172,12 +193,15 @@ export default function AnulacionModal({ venta, onSuccess, onClose }: Props) {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={onlineMode ? undefined : onClose}>
       <div className="modal anulacion-modal" onClick={(e) => e.stopPropagation()}>
 
         <div className="modal-header">
           <h2>Anular venta</h2>
-          <button className="modal-close" onClick={onlineMode ? handleCancelarRemoto : onClose}>×</button>
+          <button
+            className="modal-close"
+            onClick={onlineMode ? handleCancelarRemoto : onClose}
+          >×</button>
         </div>
 
         <div className="modal-body">
@@ -188,6 +212,18 @@ export default function AnulacionModal({ venta, onSuccess, onClose }: Props) {
             <div className="anulacion-row"><span>Método</span><span>{venta.metodo_pago}</span></div>
           </div>
 
+          {/* ── Esperando respuesta: banner + PIN simultáneos ── */}
+          {onlineMode && (
+            <WaitingConPin
+              venta={venta}
+              solicitanteId={usuario!.id}
+              motivo={motivo}
+              onSuccess={onSuccess}
+              onClose={handleCancelarRemoto}
+            />
+          )}
+
+          {/* ── Pre-solicitud ── */}
           {!onlineMode && (
             <>
               <label className="form-label">Motivo (opcional)</label>
@@ -197,44 +233,39 @@ export default function AnulacionModal({ venta, onSuccess, onClose }: Props) {
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value)}
               />
-            </>
-          )}
 
-          {/* Modo online: solicitar y esperar */}
-          {usarOnline && !onlineMode && (
-            <div className="anulacion-online-info">
-              <p>Red disponible — la solicitud se enviará al administrador para aprobación.</p>
-              <button className="btn-ghost" onClick={() => setForzoOffline(true)}>
-                Usar PIN local
-              </button>
-            </div>
-          )}
+              {/* Online: botón de solicitar + link para usar PIN directo */}
+              {usarOnline && (
+                <div className="anulacion-online-info">
+                  <p>Red disponible — se enviará una notificación al administrador.</p>
+                  <button className="btn-ghost" onClick={() => setForzoOffline(true)}>
+                    Usar solo PIN local
+                  </button>
+                </div>
+              )}
 
-          {onlineMode && (
-            <WaitingApproval
-              venta={venta}
-              onForzarOffline={() => { setOnlineMode(false); setForzoOffline(true) }}
-              onSuccess={onSuccess}
-              onClose={handleCancelarRemoto}
-            />
-          )}
-
-          {/* Modo offline: PIN pad */}
-          {(!usarOnline || forzoOffline) && !onlineMode && (
-            <>
-              {pinError && <p className="error-msg">{pinError}</p>}
-              <PinOffline
-                ventaId={venta.id}
-                solicitanteId={usuario!.id}
-                motivo={motivo}
-                onSuccess={onSuccess}
-                onError={(msg) => setPinError(msg)}
-              />
+              {/* Offline o forzó offline: PIN pad */}
+              {(!usarOnline) && (
+                <>
+                  <p className="form-label" style={{ textAlign: 'center', marginTop: 8 }}>
+                    PIN del administrador
+                  </p>
+                  {pinError && <p className="pin-error">{pinError}</p>}
+                  <PinOffline
+                    ventaId={venta.id}
+                    solicitanteId={usuario!.id}
+                    motivo={motivo}
+                    onSuccess={onSuccess}
+                    onError={setPinError}
+                  />
+                </>
+              )}
             </>
           )}
         </div>
 
-        {!onlineMode && usarOnline && !forzoOffline && (
+        {/* ── Footer ── */}
+        {!onlineMode && usarOnline && (
           <div className="modal-footer">
             <button className="btn-ghost" onClick={onClose}>Cancelar</button>
             <button className="btn-danger" onClick={handleSolicitarOnline}>

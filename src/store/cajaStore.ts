@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Usuario, TurnoCaja } from '@shared/types/venta.types'
 
-export type AdminPage = 'checkout' | 'inventario' | 'reportes'
+export type AdminPage = 'checkout' | 'inventario' | 'reportes' | 'config'
 
 interface CajaState {
   usuario: Usuario | null

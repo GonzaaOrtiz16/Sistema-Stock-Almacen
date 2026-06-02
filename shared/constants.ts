@@ -10,6 +10,7 @@ export const IPC = {
   // Ventas
   VENTAS_CREAR:               'ventas:crear',
   VENTAS_LISTAR_TURNO:        'ventas:listar-turno',
+  VENTAS_DETALLE:             'ventas:detalle',
   VENTAS_ANULAR:              'ventas:anular',
   VENTAS_ANULAR_LOCAL:        'ventas:anular-local',
 
@@ -46,6 +47,14 @@ export const IPC = {
   UPDATER_PROGRESS:           'updater:progress',
   UPDATER_DOWNLOADED:         'updater:downloaded',
   UPDATER_INSTALL:            'updater:install',
+
+  // Impresión (tiquetera)
+  PRINTER_LISTAR:             'printer:listar',
+  PRINTER_CONFIG_GET:         'printer:config-get',
+  PRINTER_CONFIG_SET:         'printer:config-set',
+  PRINTER_TEST:               'printer:test',
+  PRINTER_IMPRIMIR_VENTA:     'printer:imprimir-venta',
+  PRINTER_REIMPRIMIR:         'printer:reimprimir',
 } as const
 
 // Escáner de código de barras

@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3'
-import type { Venta, CrearVentaInput, MetodoPago } from '../../../shared/types/venta.types'
+import type { Venta, CrearVentaInput, MetodoPago, LineaVenta } from '../../../shared/types/venta.types'
 
 export type VentasRepo = ReturnType<typeof createVentasRepo>
 
@@ -31,9 +31,29 @@ export function createVentasRepo(db: Database.Database) {
     "SELECT * FROM ventas WHERE turno_id = ? AND estado != 'anulada' ORDER BY timestamp DESC",
   )
 
+  // Historial completo del turno: incluye las anuladas (para tacharlas) y el nombre del cajero
+  const stmtListByTurnoTodas = db.prepare(`
+    SELECT v.*, u.nombre AS usuario_nombre
+    FROM ventas v
+    LEFT JOIN usuarios u ON u.id = v.usuario_id
+    WHERE v.turno_id = ?
+    ORDER BY v.timestamp DESC
+  `)
+
   const stmtGetDetalle = db.prepare(
     'SELECT producto_id, cantidad FROM detalle_ventas WHERE venta_id = ?',
   )
+
+  // Detalle con nombre del producto, para el desglose "más info" en el historial
+  const stmtDetalleConNombre = db.prepare(`
+    SELECT dv.producto_id,
+           COALESCE(p.nombre, '(producto eliminado)') AS nombre,
+           dv.cantidad, dv.precio_unitario, dv.subtotal
+    FROM detalle_ventas dv
+    LEFT JOIN productos p ON p.id = dv.producto_id
+    WHERE dv.venta_id = ?
+    ORDER BY dv.id
+  `)
 
   const stmtAnularVenta = db.prepare(`
     UPDATE ventas
@@ -107,8 +127,13 @@ export function createVentasRepo(db: Database.Database) {
       return txCrear(input)
     },
 
-    listarPorTurno(turno_id: number): Venta[] {
-      return stmtListByTurno.all(turno_id) as Venta[]
+    listarPorTurno(turno_id: number, incluirAnuladas = false): Venta[] {
+      const stmt = incluirAnuladas ? stmtListByTurnoTodas : stmtListByTurno
+      return stmt.all(turno_id) as Venta[]
+    },
+
+    detallePorVenta(venta_id: number): LineaVenta[] {
+      return stmtDetalleConNombre.all(venta_id) as LineaVenta[]
     },
 
     anular(

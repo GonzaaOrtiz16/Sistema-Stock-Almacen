@@ -3,10 +3,11 @@ import type {
 } from '../shared/types/producto.types'
 import type {
   Venta, TurnoCaja, Usuario, CrearVentaInput,
-  AnulacionRequest, AnulacionLocal, ResumenTurno,
+  AnulacionRequest, AnulacionLocal, ResumenTurno, LineaVenta,
 } from '../shared/types/venta.types'
 import type { SyncInfo, SyncProgress } from '../shared/types/sync.types'
 import type { ResumenPeriodo, VentaDiaria, TopProducto } from '../shared/types/reporte.types'
+import type { PrinterConfig, ImpresoraInfo, TicketData, PrintResult } from '../shared/types/printer.types'
 
 declare global {
   interface Window {
@@ -21,7 +22,8 @@ declare global {
       }
       ventas: {
         crear:          (i: CrearVentaInput)    => Promise<Venta>
-        listarPorTurno: (turno_id: number)      => Promise<Venta[]>
+        listarPorTurno: (turno_id: number, incluirAnuladas?: boolean) => Promise<Venta[]>
+        detalle:        (venta_id: number)      => Promise<LineaVenta[]>
         anular:         (r: AnulacionRequest)   => Promise<void>
         anularLocal:    (r: AnulacionLocal)     => Promise<void>
       }
@@ -35,6 +37,14 @@ declare global {
         listarUsuarios: () => Promise<Array<{ id: number; nombre: string; rol: string }>>
         login:  (pin: string)  => Promise<Usuario | null>
         logout: ()             => Promise<void>
+      }
+      printer: {
+        listar:        () => Promise<{ ok: boolean; data?: ImpresoraInfo[]; error?: string }>
+        getConfig:     () => Promise<{ ok: boolean; data?: PrinterConfig; error?: string }>
+        setConfig:     (config: PrinterConfig) => Promise<{ ok: boolean; error?: string }>
+        test:          (config?: PrinterConfig) => Promise<PrintResult>
+        imprimirVenta: (data: TicketData) => Promise<PrintResult>
+        reimprimir:    (data: TicketData) => Promise<PrintResult>
       }
       anulaciones: {
         solicitarRemoto: (r: AnulacionRequest)                          => Promise<void>

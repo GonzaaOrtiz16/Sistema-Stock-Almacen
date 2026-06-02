@@ -4,12 +4,12 @@ import { useCajaStore } from '../../store/cajaStore'
 import { useBarcode } from '../../hooks/useBarcode'
 import { useToast } from '../../components/ui'
 import type { Producto } from '@shared/types/producto.types'
-import type { ItemCarrito, Venta } from '@shared/types/venta.types'
+import type { ItemCarrito, Venta, LineaVenta } from '@shared/types/venta.types'
 import CartItem from './CartItem'
 import PaymentModal from './PaymentModal'
 import AnulacionModal from './AnulacionModal'
 import CierreCaja from '../caja/CierreCaja'
-import { formatPrecio, formatFecha } from '../../utils/format'
+import { formatPrecio, formatHora } from '../../utils/format'
 
 export default function CheckoutPage() {
   const { items, addItem, updateCantidad, removeItem, clear } = useCartStore()
@@ -24,10 +24,68 @@ export default function CheckoutPage() {
   const [scanError,    setScanError]    = useState('')
   const [showPayment,  setShowPayment]  = useState(false)
   const [anularVenta,  setAnularVenta]  = useState<Venta | null>(null)
-  const [lastVenta,    setLastVenta]    = useState<Venta | null>(null)
+  const [historial,    setHistorial]    = useState<Venta[]>([])
+  const [expandido,    setExpandido]    = useState<number | null>(null)
+  const [detalles,     setDetalles]     = useState<Record<number, LineaVenta[]>>({})
+  const [filtroMonto,  setFiltroMonto]  = useState('')
+  const [soloAnuladas, setSoloAnuladas] = useState(false)
   const [showCierre,   setShowCierre]   = useState(false)
 
   const searchRef = useRef<HTMLInputElement>(null)
+
+  // ── Historial de ventas del turno ──────────────────────────────────────────
+  // Persiste todas las ventas del turno (incluidas las anuladas) hasta el cierre.
+  const refreshHistorial = useCallback(async () => {
+    if (!turnoActivo) { setHistorial([]); return }
+    const ventas = await window.electronAPI.ventas.listarPorTurno(turnoActivo.id, true)
+    setHistorial(ventas)
+  }, [turnoActivo])
+
+  useEffect(() => { refreshHistorial() }, [refreshHistorial])
+
+  // Expande/colapsa el desglose de productos de una venta (carga perezosa + cache)
+  const toggleDetalle = useCallback(async (ventaId: number) => {
+    setExpandido((prev) => (prev === ventaId ? null : ventaId))
+    if (detalles[ventaId] === undefined) {
+      const lineas = await window.electronAPI.ventas.detalle(ventaId)
+      setDetalles((prev) => ({ ...prev, [ventaId]: lineas }))
+    }
+  }, [detalles])
+
+  // Reimpresión manual del ticket (no depende del flag de auto-impresión)
+  const handleReimprimir = useCallback(async (v: Venta) => {
+    const lineas = detalles[v.id] ?? await window.electronAPI.ventas.detalle(v.id)
+    const r = await window.electronAPI.printer.reimprimir({
+      ventaId:    v.id,
+      fechaISO:   v.timestamp,
+      cajero:     v.usuario_nombre ?? usuario?.nombre ?? '',
+      items:      lineas.map((l) => ({
+        nombre:          l.nombre,
+        cantidad:        l.cantidad,
+        precio_unitario: l.precio_unitario,
+        subtotal:        l.subtotal,
+      })),
+      total:      v.total,
+      metodoPago: v.metodo_pago,
+      recibido:   v.monto_recibido ?? 0,
+      vuelto:     v.vuelto ?? 0,
+    })
+    if (r.ok) show('Ticket reimpreso', 'success')
+    else show('No se pudo imprimir el ticket. Revisá la impresora en Configuración.', 'error')
+  }, [detalles, usuario, show])
+
+  const totalDia = historial.reduce(
+    (acc, v) => (v.estado === 'anulada' ? acc : acc + v.total),
+    0,
+  )
+  const cantVentasActivas = historial.filter((v) => v.estado !== 'anulada').length
+
+  // Filtro del historial: por monto (coincidencia parcial) y/o solo anuladas
+  const historialFiltrado = historial.filter((v) => {
+    if (soloAnuladas && v.estado !== 'anulada') return false
+    if (filtroMonto.trim() && !v.total.toFixed(2).includes(filtroMonto.trim())) return false
+    return true
+  })
 
   // ── Barcode scanner ────────────────────────────────────────────────────────
   const handleScan = useCallback(async (barcode: string) => {
@@ -195,11 +253,6 @@ export default function CheckoutPage() {
               >
                 Cobrar <kbd>F1</kbd>
               </button>
-              {lastVenta && (
-                <button className="btn-anular" onClick={() => setAnularVenta(lastVenta)}>
-                  Anular última
-                </button>
-              )}
             </div>
           </div>
         </section>
@@ -233,12 +286,128 @@ export default function CheckoutPage() {
 
           {scanError && <p className="scan-error">{scanError}</p>}
 
-          {lastVenta && (
-            <div className="last-sale">
-              <span>Última venta</span>
-              <span>{formatPrecio(lastVenta.total)} · {formatFecha(lastVenta.timestamp)}</span>
+          {/* ─ Historial de ventas del turno ─ */}
+          <div className="historial-panel">
+            <div className="historial-header">
+              <span>Ventas del turno</span>
+              <span className="historial-count">
+                {cantVentasActivas} · {formatPrecio(totalDia)}
+              </span>
             </div>
-          )}
+
+            {historial.length > 0 && (
+              <div className="historial-filtros">
+                <input
+                  className="historial-filtro-input"
+                  placeholder="Filtrar por monto…"
+                  inputMode="decimal"
+                  value={filtroMonto}
+                  onChange={(e) => setFiltroMonto(e.target.value)}
+                />
+                <label className="historial-filtro-check">
+                  <input
+                    type="checkbox"
+                    checked={soloAnuladas}
+                    onChange={(e) => setSoloAnuladas(e.target.checked)}
+                  />
+                  Solo anuladas
+                </label>
+              </div>
+            )}
+
+            <div className="historial-list">
+              {historial.length === 0 ? (
+                <p className="historial-empty">Todavía no hay ventas en este turno</p>
+              ) : historialFiltrado.length === 0 ? (
+                <p className="historial-empty">Ninguna venta coincide con el filtro</p>
+              ) : (
+                historialFiltrado.map((v) => {
+                  const anulada  = v.estado === 'anulada'
+                  const abierto  = expandido === v.id
+                  const lineas   = detalles[v.id]
+                  const esEfectivo = v.metodo_pago === 'efectivo'
+                  return (
+                    <div key={v.id} className={`historial-item${anulada ? ' anulada' : ''}`}>
+                      <button
+                        className={`historial-row${abierto ? ' abierto' : ''}`}
+                        onClick={() => toggleDetalle(v.id)}
+                      >
+                        <div className="historial-item-main">
+                          <span className="historial-hora">{formatHora(v.timestamp)}</span>
+                          <div className="historial-tags">
+                            <span className={`metodo-pill metodo-${v.metodo_pago}`}>
+                              {v.metodo_pago}
+                            </span>
+                            {v.usuario_nombre && (
+                              <span className="historial-cajero">{v.usuario_nombre}</span>
+                            )}
+                          </div>
+                        </div>
+                        {anulada && <span className="historial-badge">Anulada</span>}
+                        <span className="historial-total">{formatPrecio(v.total)}</span>
+                        <span className="historial-chevron">{abierto ? '▴' : '▾'}</span>
+                      </button>
+
+                      {abierto && (
+                        <div className="historial-detalle">
+                          {lineas === undefined ? (
+                            <p className="detalle-cargando">Cargando…</p>
+                          ) : (
+                            <>
+                              {lineas.map((l) => (
+                                <div key={l.producto_id} className="detalle-linea">
+                                  <span className="detalle-cant">{l.cantidad}×</span>
+                                  <span className="detalle-nombre">{l.nombre}</span>
+                                  <span className="detalle-unit">{formatPrecio(l.precio_unitario)}</span>
+                                  <span className="detalle-sub">{formatPrecio(l.subtotal)}</span>
+                                </div>
+                              ))}
+
+                              <div className="detalle-pago">
+                                <div className="detalle-pago-row">
+                                  <span>Total</span>
+                                  <span>{formatPrecio(v.total)}</span>
+                                </div>
+                                {esEfectivo && v.monto_recibido != null && (
+                                  <>
+                                    <div className="detalle-pago-row">
+                                      <span>Recibido</span>
+                                      <span>{formatPrecio(v.monto_recibido)}</span>
+                                    </div>
+                                    <div className="detalle-pago-row">
+                                      <span>Vuelto</span>
+                                      <span>{formatPrecio(v.vuelto ?? 0)}</span>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+
+                              <div className="detalle-acciones">
+                                <button
+                                  className="historial-info"
+                                  onClick={() => handleReimprimir(v)}
+                                >
+                                  🖨  Reimprimir
+                                </button>
+                                {!anulada && (
+                                  <button
+                                    className="historial-anular"
+                                    onClick={() => setAnularVenta(v)}
+                                  >
+                                    ✕  Anular
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
         </section>
 
       </div>
@@ -246,7 +415,11 @@ export default function CheckoutPage() {
       {/* Modales */}
       {showPayment && (
         <PaymentModal
-          onSuccess={(v) => { setLastVenta(v); setShowPayment(false); show('Venta completada', 'success') }}
+          onSuccess={(v) => {
+            setHistorial((prev) => [v, ...prev])
+            setShowPayment(false)
+            show('Venta completada', 'success')
+          }}
           onClose={() => setShowPayment(false)}
         />
       )}
@@ -254,7 +427,11 @@ export default function CheckoutPage() {
       {anularVenta && (
         <AnulacionModal
           venta={anularVenta}
-          onSuccess={() => { setAnularVenta(null); setLastVenta(null); show('Venta anulada', 'warning') }}
+          onSuccess={() => {
+            setAnularVenta(null)
+            refreshHistorial()
+            show('Venta anulada', 'warning')
+          }}
           onClose={() => setAnularVenta(null)}
         />
       )}

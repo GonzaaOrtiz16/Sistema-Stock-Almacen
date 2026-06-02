@@ -6,6 +6,7 @@ import AperturaCaja from './modules/caja/AperturaCaja'
 import CheckoutPage from './modules/checkout/CheckoutPage'
 import ProductosPage from './modules/inventario/ProductosPage'
 import ReportesPage from './modules/reportes/ReportesPage'
+import ConfiguracionPage from './modules/config/ConfiguracionPage'
 
 // ─── Layout de administrador ─────────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
     { page: 'checkout',   label: 'Caja' },
     { page: 'inventario', label: 'Inventario' },
     { page: 'reportes',   label: 'Reportes' },
+    { page: 'config',     label: 'Configuración' },
   ]
 
   return (
@@ -83,6 +85,7 @@ export default function App() {
       {adminPage === 'checkout'   && <CheckoutPage />}
       {adminPage === 'inventario' && <ProductosPage />}
       {adminPage === 'reportes'   && <ReportesPage />}
+      {adminPage === 'config'     && <ConfiguracionPage />}
     </AdminLayout>
   )
 }

@@ -5,7 +5,7 @@ import type {
 } from '../shared/types/producto.types'
 import type {
   Venta, TurnoCaja, Usuario, CrearVentaInput,
-  AnulacionRequest, AnulacionLocal, ResumenTurno,
+  AnulacionRequest, AnulacionLocal, ResumenTurno, LineaVenta,
 } from '../shared/types/venta.types'
 import type { SyncInfo, SyncProgress } from '../shared/types/sync.types'
 import type { ResumenPeriodo, VentaDiaria, TopProducto } from '../shared/types/reporte.types'
@@ -23,7 +23,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   ventas: {
     crear:          (i: CrearVentaInput)   => ipcRenderer.invoke(IPC.VENTAS_CREAR,        i) as Promise<Venta>,
-    listarPorTurno: (id: number)           => ipcRenderer.invoke(IPC.VENTAS_LISTAR_TURNO, id) as Promise<Venta[]>,
+    listarPorTurno: (id: number, incluirAnuladas?: boolean) => ipcRenderer.invoke(IPC.VENTAS_LISTAR_TURNO, id, incluirAnuladas) as Promise<Venta[]>,
+    detalle:        (id: number)           => ipcRenderer.invoke(IPC.VENTAS_DETALLE, id) as Promise<LineaVenta[]>,
     anular:         (r: AnulacionRequest)  => ipcRenderer.invoke(IPC.VENTAS_ANULAR,       r) as Promise<void>,
     anularLocal:    (r: AnulacionLocal)    => ipcRenderer.invoke(IPC.VENTAS_ANULAR_LOCAL, r) as Promise<void>,
   },
@@ -39,6 +40,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listarUsuarios: () => ipcRenderer.invoke(IPC.AUTH_LISTAR_USUARIOS) as Promise<Array<{ id: number; nombre: string; rol: string }>>,
     login:  (pin: string) => ipcRenderer.invoke(IPC.AUTH_LOGIN,  pin) as Promise<Usuario | null>,
     logout: ()            => ipcRenderer.invoke(IPC.AUTH_LOGOUT)      as Promise<void>,
+  },
+
+  printer: {
+    listar:        ()                => ipcRenderer.invoke(IPC.PRINTER_LISTAR),
+    getConfig:     ()                => ipcRenderer.invoke(IPC.PRINTER_CONFIG_GET),
+    setConfig:     (config: unknown) => ipcRenderer.invoke(IPC.PRINTER_CONFIG_SET, config),
+    test:          (config?: unknown)=> ipcRenderer.invoke(IPC.PRINTER_TEST, config),
+    imprimirVenta: (data: unknown)   => ipcRenderer.invoke(IPC.PRINTER_IMPRIMIR_VENTA, data),
+    reimprimir:    (data: unknown)   => ipcRenderer.invoke(IPC.PRINTER_REIMPRIMIR, data),
   },
 
   anulaciones: {

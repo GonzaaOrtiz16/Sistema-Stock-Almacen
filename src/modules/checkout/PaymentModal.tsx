@@ -61,6 +61,31 @@ export default function PaymentModal({ onSuccess, onClose }: Props) {
                       : metodo === 'mixto'    ? mixtoEfNum + mixtoTarjeta
                       : undefined,
       })
+
+      // Imprimir ticket en la tiquetera (no bloquea ni revierte la venta)
+      const ticketItems = items.map((i) => ({
+        nombre:          i.nombre,
+        cantidad:        i.cantidad,
+        precio_unitario: i.precio_unitario,
+        subtotal:        i.subtotal,
+      }))
+      void window.electronAPI.printer
+        .imprimirVenta({
+          ventaId:    venta.id,
+          fechaISO:   venta.timestamp,
+          cajero:     usuario.nombre,
+          items:      ticketItems,
+          total:      venta.total,
+          metodoPago: venta.metodo_pago,
+          recibido:   venta.monto_recibido ?? 0,
+          vuelto:     venta.vuelto ?? 0,
+        })
+        .then((r) => {
+          if (!r.ok && r.error && r.error !== 'impresion-deshabilitada') {
+            setError('Venta ok, pero no se pudo imprimir el ticket')
+          }
+        })
+
       clear()
       onSuccess(venta)
     } catch (err) {

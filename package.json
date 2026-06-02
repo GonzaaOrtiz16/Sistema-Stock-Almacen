@@ -23,6 +23,7 @@
     "zustand": "^5.0.1"
   },
   "devDependencies": {
+    "@electron/fuses": "^2.1.1",
     "@types/bcrypt": "^5.0.2",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.7.5",

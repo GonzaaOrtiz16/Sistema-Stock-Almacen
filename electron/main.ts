@@ -10,6 +10,7 @@ import { registerVentasHandlers } from './ipc/ventas.ipc'
 import { registerCajaHandlers } from './ipc/caja.ipc'
 import { registerSyncHandlers } from './ipc/sync.ipc'
 import { registerReportesHandlers } from './ipc/reportes.ipc'
+import { registerPrinterHandlers } from './ipc/printer.ipc'
 import { IPC } from '../shared/constants'
 
 let mainWindow: BrowserWindow | null = null
@@ -66,6 +67,7 @@ function registerIpcHandlers(): void {
   registerCajaHandlers()
   registerSyncHandlers(syncEngine!)
   registerReportesHandlers()
+  registerPrinterHandlers()
 
   // Instalar actualización cuando el renderer lo solicite
   ipcMain.on(IPC.UPDATER_INSTALL, () => installUpdate())

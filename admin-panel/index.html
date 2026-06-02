@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Anulaciones — Almacén Gabriela</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f172a;
+      --surface:  #1e293b;
+      --border:   #334155;
+      --muted:    #94a3b8;
+      --text:     #f1f5f9;
+      --primary:  #6366f1;
+      --green:    #16a34a;
+      --red:      #dc2626;
+      --purple:   #a78bfa;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+    }
+
+    /* ── Login ── */
+    .login-wrap {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100dvh; padding: 1.25rem;
+    }
+    .login-card {
+      background: var(--surface); border-radius: 1.25rem;
+      padding: 2rem; width: 100%; max-width: 380px;
+    }
+    .login-logo { font-size: 2rem; margin-bottom: .5rem; }
+    .login-card h1 { font-size: 1.25rem; margin-bottom: .25rem; }
+    .login-card p  { color: var(--muted); font-size: .875rem; margin-bottom: 1.75rem; }
+
+    label { display: block; font-size: .8125rem; color: var(--muted); margin-bottom: .375rem; }
+    input[type="email"], input[type="password"] {
+      width: 100%; padding: .8125rem 1rem;
+      border-radius: .625rem; border: 1.5px solid var(--border);
+      background: var(--bg); color: var(--text); font-size: 1rem;
+      margin-bottom: 1rem; transition: border-color .15s;
+    }
+    input:focus { outline: none; border-color: var(--primary); }
+
+    .btn-login {
+      width: 100%; padding: .875rem; border-radius: .625rem; border: none;
+      background: var(--primary); color: #fff; font-size: 1rem;
+      font-weight: 600; cursor: pointer; transition: opacity .15s;
+    }
+    .btn-login:disabled { opacity: .55; cursor: not-allowed; }
+    .btn-login:not(:disabled):active { opacity: .8; }
+
+    .login-error {
+      color: #fca5a5; font-size: .875rem;
+      background: rgba(220,38,38,.12); border-radius: .5rem;
+      padding: .625rem .875rem; margin-bottom: 1rem;
+    }
+
+    /* ── Dashboard ── */
+    .dash { padding: 1rem; max-width: 600px; margin: 0 auto; padding-bottom: 3rem; }
+
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .875rem 0 1.25rem; border-bottom: 1px solid var(--border);
+      margin-bottom: 1.25rem;
+    }
+    .topbar h1 { font-size: 1.0625rem; font-weight: 700; }
+    .badge-count {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--primary); color: #fff; border-radius: 999px;
+      font-size: .75rem; font-weight: 700; min-width: 1.375rem; height: 1.375rem;
+      padding: 0 .375rem; margin-left: .5rem;
+    }
+    .btn-logout {
+      background: none; border: 1.5px solid var(--border); color: var(--muted);
+      padding: .375rem .875rem; border-radius: .5rem; font-size: .875rem; cursor: pointer;
+    }
+
+    /* ── Empty / Loading ── */
+    .state-msg {
+      text-align: center; color: var(--muted); padding: 4rem 1rem;
+    }
+    .state-msg .icon { font-size: 3.5rem; display: block; margin-bottom: 1rem; }
+    .state-msg p { font-size: 1rem; }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface); border-radius: 1rem;
+      border: 1.5px solid var(--border); padding: 1.25rem;
+      margin-bottom: 1rem; transition: opacity .3s, transform .3s;
+    }
+    .card.resolving { opacity: .4; pointer-events: none; transform: scale(.98); }
+
+    .card-top {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: .875rem;
+    }
+    .cajero-name { font-weight: 700; font-size: 1rem; }
+    .venta-total { font-size: 1.375rem; font-weight: 700; color: var(--purple); }
+
+    .meta { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .875rem; }
+    .chip {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: .375rem; padding: .25rem .625rem;
+      font-size: .8125rem; color: var(--muted);
+    }
+
+    .motivo-box {
+      border-left: 3px solid var(--primary);
+      background: rgba(99,102,241,.08);
+      padding: .625rem .875rem; border-radius: 0 .5rem .5rem 0;
+      font-size: .875rem; color: #cbd5e1; margin-bottom: .875rem;
+    }
+
+    .items-label {
+      font-size: .75rem; text-transform: uppercase; letter-spacing: .06em;
+      color: #475569; margin-bottom: .375rem;
+    }
+    .item-row {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: .875rem; padding: .3125rem 0;
+      border-bottom: 1px solid rgba(51,65,85,.6);
+    }
+    .item-row:last-child { border-bottom: none; }
+    .item-name { color: var(--text); }
+    .item-qty  { color: var(--muted); font-size: .8125rem; margin: 0 .5rem; }
+    .item-sub  { font-weight: 600; }
+
+    .actions { display: flex; gap: .75rem; margin-top: 1.125rem; }
+    .btn-approve, .btn-reject {
+      flex: 1; padding: .875rem; border-radius: .625rem; border: none;
+      font-size: .9375rem; font-weight: 700; cursor: pointer;
+      transition: opacity .15s; letter-spacing: .01em;
+    }
+    .btn-approve { background: var(--green); color: #fff; }
+    .btn-reject  { background: var(--red);   color: #fff; }
+    .btn-approve:active, .btn-reject:active { opacity: .75; }
+    .btn-approve:disabled, .btn-reject:disabled { opacity: .45; cursor: not-allowed; }
+
+    .footer {
+      text-align: center; font-size: .75rem; color: #475569; padding: 1rem 0;
+    }
+  </style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+  // ── Config ────────────────────────────────────────────────────
+  const SUPABASE_URL     = 'https://lisevdeoxwowavlebtzj.supabase.co'
+  const SUPABASE_ANON_KEY = 'REEMPLAZAR_CON_ANON_KEY'
+
+  const { createClient } = supabase
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+  let timer = null
+
+  // ── Helpers ───────────────────────────────────────────────────
+  const app = () => document.getElementById('app')
+
+  const money = n =>
+    '$ ' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2 })
+
+  const fecha = s =>
+    new Date(s).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
+
+  const metodo = m =>
+    ({ efectivo:'Efectivo', debito:'Débito', credito:'Crédito', qr:'QR', mixto:'Mixto' }[m] ?? m)
+
+  // ── Vistas ────────────────────────────────────────────────────
+  function showLogin(error = '') {
+    clearInterval(timer)
+    app().innerHTML = `
+      <div class="login-wrap">
+        <div class="login-card">
+          <div class="login-logo">🏪</div>
+          <h1>Almacén Gabriela</h1>
+          <p>Ingresá para gestionar anulaciones</p>
+          ${error ? `<div class="login-error">${error}</div>` : ''}
+          <label>Email</label>
+          <input type="email" id="em" placeholder="admin@ejemplo.com" autocomplete="email" inputmode="email">
+          <label>Contraseña</label>
+          <input type="password" id="pw" placeholder="••••••••" autocomplete="current-password">
+          <button class="btn-login" id="loginBtn" onclick="login()">Ingresar</button>
+        </div>
+      </div>`
+    const enter = e => { if (e.key === 'Enter') login() }
+    document.getElementById('em').addEventListener('keydown', enter)
+    document.getElementById('pw').addEventListener('keydown', enter)
+    setTimeout(() => document.getElementById('em').focus(), 100)
+  }
+
+  function showDashboard(rows) {
+    const n = rows.length
+    const content = n === 0
+      ? `<div class="state-msg">
+           <span class="icon">✅</span>
+           <p>No hay solicitudes pendientes</p>
+         </div>`
+      : rows.map(cardHtml).join('')
+
+    app().innerHTML = `
+      <div class="dash">
+        <div class="topbar">
+          <h1>Anulaciones${n ? `<span class="badge-count">${n}</span>` : ''}</h1>
+          <button class="btn-logout" onclick="logout()">Salir</button>
+        </div>
+        ${content}
+        <div class="footer">Actualiza automáticamente cada 30 s</div>
+      </div>`
+  }
+
+  function cardHtml(r) {
+    const items = (r.items ?? []).map(it => `
+      <div class="item-row">
+        <span class="item-name">${it.nombre}</span>
+        <span class="item-qty">× ${it.cantidad}</span>
+        <span class="item-sub">${money(it.subtotal)}</span>
+      </div>`).join('')
+
+    return `
+      <div class="card" id="c-${r.id}">
+        <div class="card-top">
+          <span class="cajero-name">👤 ${r.cajero}</span>
+          <span class="venta-total">${money(r.total)}</span>
+        </div>
+        <div class="meta">
+          <span class="chip">🕐 ${fecha(r.venta_ts)}</span>
+          <span class="chip">💳 ${metodo(r.metodo_pago)}</span>
+        </div>
+        ${r.motivo ? `<div class="motivo-box">Motivo: ${r.motivo}</div>` : ''}
+        ${items ? `<div class="items-label">Ítems</div>${items}` : ''}
+        <div class="actions">
+          <button class="btn-approve" onclick="resolver('${r.id}','aprobada',this)">✓ Aprobar</button>
+          <button class="btn-reject"  onclick="resolver('${r.id}','rechazada',this)">✕ Rechazar</button>
+        </div>
+      </div>`
+  }
+
+  // ── Acciones ──────────────────────────────────────────────────
+  async function login() {
+    const btn  = document.getElementById('loginBtn')
+    const email = document.getElementById('em').value.trim()
+    const pass  = document.getElementById('pw').value
+    if (!email || !pass) return
+    btn.disabled = true
+    btn.textContent = 'Ingresando…'
+    const { error } = await sb.auth.signInWithPassword({ email, password: pass })
+    if (error) showLogin('Email o contraseña incorrectos')
+    else load()
+  }
+
+  async function logout() {
+    clearInterval(timer)
+    await sb.auth.signOut()
+    showLogin()
+  }
+
+  async function load() {
+    app().innerHTML = '<div class="state-msg"><span class="icon">⏳</span><p>Cargando…</p></div>'
+    const { data, error } = await sb
+      .from('anulaciones')
+      .select('*')
+      .eq('estado', 'pendiente')
+      .order('created_at', { ascending: false })
+    if (error) { showLogin('Error de conexión. Intentá de nuevo.'); return }
+    showDashboard(data)
+    clearInterval(timer)
+    timer = setInterval(load, 30_000)
+  }
+
+  async function resolver(id, estado, btn) {
+    const card = document.getElementById('c-' + id)
+    card.classList.add('resolving')
+    const { error } = await sb.from('anulaciones').update({ estado }).eq('id', id)
+    if (error) {
+      card.classList.remove('resolving')
+      alert('No se pudo guardar. Intentá de nuevo.')
+    } else {
+      setTimeout(() => card.remove(), 600)
+    }
+  }
+
+  // ── Init ──────────────────────────────────────────────────────
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) load()
+    else showLogin()
+  })
+</script>
+</body>
+</html>

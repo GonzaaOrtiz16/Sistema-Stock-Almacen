@@ -406,7 +406,7 @@ kbd {
 .cart-item:hover     { background: #14142a; }
 .cart-item.selected  { background: #1a2040; border-left: 3px solid #4f8ef7; }
 
-.cart-item-name     { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cart-item-name     { font-size: 0.9rem; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 .cart-item-qty      { display: flex; align-items: center; gap: 4px; }
 .qty-btn            { background: #1e1e30; border-radius: 4px; color: #aaa; width: 22px; height: 22px; font-size: 1rem; line-height: 1; }
 .qty-btn:hover      { background: #2a2a40; color: #eaeaea; }
@@ -757,7 +757,7 @@ kbd {
 }
 .detalle-linea:last-of-type { border-bottom: none; }
 .detalle-cant   { color: var(--hist-accent); font-weight: 700; white-space: nowrap; }
-.detalle-nombre { color: #e0d6ec; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.detalle-nombre { color: #e0d6ec; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 .detalle-unit   { color: #7a6e8e; white-space: nowrap; font-size: 0.73rem; }
 .detalle-sub    { color: #d6c7e8; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .detalle-cargando { color: #7a6e8e; font-size: 0.8rem; padding: 10px 0; text-align: center; }
@@ -1084,7 +1084,7 @@ kbd {
 .inv-row.no-stock:hover { background: #260f0f; }
 .inv-row td           { padding: 9px 12px; }
 
-.inv-nombre  { font-weight: 500; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inv-nombre  { font-weight: 500; max-width: 260px; overflow-wrap: anywhere; word-break: break-word; }
 .inv-code    { font-size: 0.8rem; color: #888; font-family: monospace; }
 .inv-price   { font-weight: 600; color: #4f8ef7; }
 .inv-cost    { color: #888; }
@@ -1259,5 +1259,5 @@ kbd {
 }
 .stock-recientes-list  { list-style: none; display: flex; flex-direction: column; gap: 8px; }
 .stock-reciente-item   { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.stock-reciente-nombre { font-size: 0.9rem; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stock-reciente-nombre { flex: 1; min-width: 0; font-size: 0.9rem; color: var(--color-text); overflow-wrap: anywhere; word-break: break-word; }
 .stock-reciente-cant   { font-size: 0.9rem; font-weight: 700; color: var(--color-success); flex-shrink: 0; }

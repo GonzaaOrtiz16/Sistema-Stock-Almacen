@@ -5,7 +5,8 @@ import renderer from 'vite-plugin-electron-renderer'
 import { resolve } from 'path'
 import pkg from './package.json'
 
-const externals = ['electron', ...Object.keys(pkg.dependencies)]
+// Solo quedan externos los módulos nativos (no se pueden bundlear) y electron
+const externals = ['electron', 'better-sqlite3', 'bcrypt']
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')

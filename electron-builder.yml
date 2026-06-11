@@ -4,7 +4,7 @@ copyright: Copyright © 2024 Almacén Gabriela
 
 directories:
   buildResources: build      # aquí va icon.ico para el instalador
-  output: release
+  output: C:\Users\Pc\Desktop\almacen-build
 
 files:
   - dist/**/*
@@ -14,10 +14,6 @@ files:
 asar: true
 asarUnpack:
   - "**/*.node"              # módulos nativos (better-sqlite3, bcrypt)
-
-electronFuses:
-  EnableEmbeddedAsarIntegrityValidation: false
-  OnlyLoadAppFromAsar: false
 
 # ── Windows ────────────────────────────────────────────────────────────────
 win:

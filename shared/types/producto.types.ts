@@ -40,6 +40,13 @@ export interface ProductoUpdateInput extends Partial<ProductoCreateInput> {
   id: number
 }
 
+export interface PendienteCodigo {
+  id: number
+  codigo_barras: string
+  veces: number           // cuántas veces se intentó escanear sin encontrarlo
+  created_at: string
+}
+
 export interface ActualizacionMasiva {
   tipo: 'porcentaje_global' | 'porcentaje_categoria'
   porcentaje: number          // positivo = aumento, negativo = reducción

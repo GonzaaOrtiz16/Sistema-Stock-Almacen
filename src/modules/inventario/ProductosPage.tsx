@@ -5,6 +5,15 @@ import ProductForm from './ProductForm'
 import BulkPriceUpdate from './BulkPriceUpdate'
 
 type Vista = 'tabla' | 'form-nuevo' | 'form-editar' | 'bulk'
+type EstadoStock = 'ok' | 'bajo' | 'sin-stock'
+type Filtro = 'todos' | EstadoStock
+
+// Clasifica un producto según su nivel de stock para el conteo y los colores.
+function estadoStock(p: Producto): EstadoStock {
+  if (p.stock_actual <= 0) return 'sin-stock'
+  if (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo) return 'bajo'
+  return 'ok'
+}
 
 export default function ProductosPage() {
   const [productos,   setProductos]   = useState<Producto[]>([])
@@ -12,6 +21,7 @@ export default function ProductosPage() {
   const [filtered,    setFiltered]    = useState<Producto[]>([])
   const [selected,    setSelected]    = useState<Producto | null>(null)
   const [vista,       setVista]       = useState<Vista>('tabla')
+  const [filtro,      setFiltro]      = useState<Filtro>('todos')
   const [loading,     setLoading]     = useState(false)
   const [toast,       setToast]       = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
@@ -69,8 +79,14 @@ export default function ProductosPage() {
     await loadAll()
   }
 
-  // ── Stock bajo ─────────────────────────────────────────────────────────────
-  const stockBajo = filtered.filter((p) => p.stock_actual <= p.stock_minimo && p.stock_minimo > 0)
+  // ── Conteos por estado de stock (sobre el inventario completo) ─────────────
+  const conteos = productos.reduce(
+    (acc, p) => { acc[estadoStock(p)]++; return acc },
+    { ok: 0, bajo: 0, 'sin-stock': 0 } as Record<EstadoStock, number>,
+  )
+
+  // ── Lista visible: búsqueda + filtro por estado ────────────────────────────
+  const visible = filtro === 'todos' ? filtered : filtered.filter((p) => estadoStock(p) === filtro)
 
   // ── Vista: formularios y modal masivo ─────────────────────────────────────
   if (vista === 'form-nuevo') {
@@ -98,10 +114,6 @@ export default function ProductosPage() {
       {/* Header */}
       <header className="inv-header">
         <h2 className="inv-title">Inventario</h2>
-        <span className="inv-count">{filtered.length} productos</span>
-        {stockBajo.length > 0 && (
-          <span className="stock-alert">⚠ {stockBajo.length} con stock bajo</span>
-        )}
         <div className="inv-actions">
           <button className="btn-ghost" onClick={() => setVista('bulk')}>
             Actualizar precios
@@ -111,6 +123,38 @@ export default function ProductosPage() {
           </button>
         </div>
       </header>
+
+      {/* Tarjetas de conteo por estado de stock (clic para filtrar) */}
+      <div className="inv-stats">
+        <button
+          className={`stat-card${filtro === 'todos' ? ' active' : ''}`}
+          onClick={() => setFiltro('todos')}
+        >
+          <span className="stat-num">{productos.length}</span>
+          <span className="stat-label">Productos</span>
+        </button>
+        <button
+          className={`stat-card stat-ok${filtro === 'ok' ? ' active' : ''}`}
+          onClick={() => setFiltro('ok')}
+        >
+          <span className="stat-num">{conteos.ok}</span>
+          <span className="stat-label">Stock OK</span>
+        </button>
+        <button
+          className={`stat-card stat-bajo${filtro === 'bajo' ? ' active' : ''}`}
+          onClick={() => setFiltro('bajo')}
+        >
+          <span className="stat-num">{conteos.bajo}</span>
+          <span className="stat-label">Stock bajo</span>
+        </button>
+        <button
+          className={`stat-card stat-sin${filtro === 'sin-stock' ? ' active' : ''}`}
+          onClick={() => setFiltro('sin-stock')}
+        >
+          <span className="stat-num">{conteos['sin-stock']}</span>
+          <span className="stat-label">Sin stock</span>
+        </button>
+      </div>
 
       {/* Barra de búsqueda */}
       <div className="inv-search-bar">
@@ -129,9 +173,13 @@ export default function ProductosPage() {
       <div className="inv-table-wrap">
         {loading ? (
           <p className="inv-loading">Cargando…</p>
-        ) : filtered.length === 0 ? (
+        ) : visible.length === 0 ? (
           <p className="inv-empty">
-            {query ? `Sin resultados para "${query}"` : 'No hay productos cargados aún'}
+            {query
+              ? `Sin resultados para "${query}"`
+              : filtro !== 'todos'
+                ? 'Ningún producto en esta categoría'
+                : 'No hay productos cargados aún'}
           </p>
         ) : (
           <table className="inv-table">
@@ -147,17 +195,19 @@ export default function ProductosPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => (
+              {visible.map((p) => {
+                const estado = estadoStock(p)
+                return (
                 <tr
                   key={p.id}
-                  className={`inv-row${p.stock_actual <= p.stock_minimo && p.stock_minimo > 0 ? ' low-stock' : ''}`}
+                  className={`inv-row${estado === 'bajo' ? ' low-stock' : ''}${estado === 'sin-stock' ? ' no-stock' : ''}`}
                   onClick={() => setSelected(p)}
                 >
                   <td className="inv-nombre">{p.nombre}</td>
                   <td className="inv-code">{p.codigo_barras ?? '—'}</td>
                   <td className="inv-price">{formatPrecio(p.precio_venta)}</td>
                   <td className="inv-cost">{p.precio_costo != null ? formatPrecio(p.precio_costo) : '—'}</td>
-                  <td className={`inv-stock${p.stock_actual <= p.stock_minimo && p.stock_minimo > 0 ? ' text-red' : ''}`}>
+                  <td className={`inv-stock${estado !== 'ok' ? ' text-red' : ''}`}>
                     {p.stock_actual}
                   </td>
                   <td className="inv-unit">{p.unidad}</td>
@@ -170,7 +220,8 @@ export default function ProductosPage() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         )}

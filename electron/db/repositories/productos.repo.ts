@@ -4,6 +4,7 @@ import type {
   ProductoCreateInput,
   ProductoUpdateInput,
   ActualizacionMasiva,
+  PendienteCodigo,
 } from '../../../shared/types/producto.types'
 
 export type ProductosRepo = ReturnType<typeof createProductosRepo>
@@ -62,6 +63,20 @@ export function createProductosRepo(db: Database.Database) {
   const stmtDecrStock = db.prepare(
     'UPDATE productos SET stock_actual = stock_actual - @cantidad WHERE id = @producto_id',
   )
+
+  const stmtIncrStock = db.prepare(
+    'UPDATE productos SET stock_actual = stock_actual + @cantidad, updated_at = strftime(\'%Y-%m-%dT%H:%M:%fZ\',\'now\'), sync_status = \'pending\' WHERE id = @id',
+  )
+
+  // Códigos pendientes (escaneados en caja sin producto asociado)
+  const stmtPendListar = db.prepare(
+    'SELECT * FROM pendientes_codigo ORDER BY created_at DESC',
+  )
+  const stmtPendUpsert = db.prepare(`
+    INSERT INTO pendientes_codigo (codigo_barras) VALUES (@codigo)
+    ON CONFLICT(codigo_barras) DO UPDATE SET veces = veces + 1
+  `)
+  const stmtPendEliminar = db.prepare('DELETE FROM pendientes_codigo WHERE codigo_barras = @codigo')
 
   return {
     buscarPorBarcode(barcode: string): Producto | null {
@@ -122,6 +137,25 @@ export function createProductosRepo(db: Database.Database) {
 
     decrementarStock(producto_id: number, cantidad: number): void {
       stmtDecrStock.run({ cantidad, producto_id })
+    },
+
+    agregarStock(id: number, cantidad: number): Producto {
+      stmtIncrStock.run({ id, cantidad })
+      return stmtById.get(id) as Producto
+    },
+
+    pendientesListar(): PendienteCodigo[] {
+      return stmtPendListar.all() as PendienteCodigo[]
+    },
+
+    pendientesAgregar(codigo: string): PendienteCodigo[] {
+      stmtPendUpsert.run({ codigo })
+      return stmtPendListar.all() as PendienteCodigo[]
+    },
+
+    pendientesEliminar(codigo: string): PendienteCodigo[] {
+      stmtPendEliminar.run({ codigo })
+      return stmtPendListar.all() as PendienteCodigo[]
     },
   }
 }

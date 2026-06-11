@@ -62,7 +62,7 @@ function PinEntry({
   const [pin,     setPin]     = useState('')
   const [error,   setError]   = useState('')
   const [loading, setLoading] = useState(false)
-  const { setUsuario, setTurnoActivo } = useCajaStore()
+  const { setUsuario, cargarTurnoLogin } = useCajaStore()
 
   const pinRef     = useRef(pin)
   const loadingRef = useRef(loading)
@@ -82,7 +82,7 @@ function PinEntry({
       }
       const turno = await window.electronAPI.caja.turnoActivo(result.id)
       setUsuario(result)
-      setTurnoActivo(turno)
+      cargarTurnoLogin(turno)
       onSuccess()
     } catch {
       setError('Error interno — revisá los logs')

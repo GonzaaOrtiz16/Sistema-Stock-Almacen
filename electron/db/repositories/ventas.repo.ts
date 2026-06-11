@@ -27,6 +27,32 @@ export function createVentasRepo(db: Database.Database) {
 
   const stmtGetVenta = db.prepare('SELECT * FROM ventas WHERE id = ?')
 
+  // Producto "genérico" para montos manuales (productos sin código de barras).
+  // Se crea una sola vez y se mantiene inactivo para que no aparezca en el
+  // inventario ni se pueda escanear. Su id satisface la FK de detalle_ventas.
+  const GENERICO_BARCODE = '__GENERICO__'
+  let genericoId: number | null = null
+  function getProductoGenericoId(): number {
+    if (genericoId != null) return genericoId
+    const row = db
+      .prepare('SELECT id FROM productos WHERE codigo_barras = ?')
+      .get(GENERICO_BARCODE) as { id: number } | undefined
+    if (row) {
+      genericoId = row.id
+      return genericoId
+    }
+    const res = db
+      .prepare(`
+        INSERT INTO productos
+          (codigo_barras, nombre, precio_venta, stock_actual, activo)
+        VALUES
+          (@barcode, 'Venta sin código', 0, 0, 0)
+      `)
+      .run({ barcode: GENERICO_BARCODE })
+    genericoId = Number(res.lastInsertRowid)
+    return genericoId
+  }
+
   const stmtListByTurno = db.prepare(
     "SELECT * FROM ventas WHERE turno_id = ? AND estado != 'anulada' ORDER BY timestamp DESC",
   )
@@ -92,16 +118,20 @@ export function createVentasRepo(db: Database.Database) {
     const ventaId = Number(res.lastInsertRowid)
 
     for (const item of input.items) {
+      // Los montos manuales se imputan al producto genérico y no descuentan stock.
+      const productoId = item.es_manual ? getProductoGenericoId() : item.producto_id
       const itemSubtotal = item.cantidad * item.precio_unitario - (item.descuento_item ?? 0)
       stmtInsertDetalle.run({
         venta_id:       ventaId,
-        producto_id:    item.producto_id,
+        producto_id:    productoId,
         cantidad:       item.cantidad,
         precio_unitario: item.precio_unitario,
         subtotal:       itemSubtotal,
         descuento_item: item.descuento_item ?? 0,
       })
-      stmtDecrStock.run({ cantidad: item.cantidad, producto_id: item.producto_id })
+      if (!item.es_manual) {
+        stmtDecrStock.run({ cantidad: item.cantidad, producto_id: productoId })
+      }
     }
 
     return stmtGetVenta.get(ventaId) as Venta

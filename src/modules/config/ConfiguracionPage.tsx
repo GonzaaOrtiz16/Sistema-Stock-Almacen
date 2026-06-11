@@ -15,6 +15,7 @@ export default function ConfiguracionPage() {
   const [loading, setLoading] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [probando, setProbando] = useState(false)
+  const [importando, setImportando] = useState(false)
 
   useEffect(() => {
     ;(async () => {
@@ -43,6 +44,14 @@ export default function ConfiguracionPage() {
     else show(res.error ?? 'No se pudo guardar', 'error')
   }
 
+  async function importarInventario() {
+    setImportando(true)
+    const res = await window.electronAPI.productos.importarExcel()
+    setImportando(false)
+    if (res.ok) show(`${res.importados} productos importados`, 'success')
+    else if (res.error !== 'Cancelado') show(res.error ?? 'Error al importar', 'error')
+  }
+
   async function imprimirPrueba() {
     setProbando(true)
     const res = await window.electronAPI.printer.test(config)
@@ -56,6 +65,17 @@ export default function ConfiguracionPage() {
   return (
     <div className="config-page">
       <h1 className="page-title">Configuración de impresión</h1>
+
+      <section className="config-section">
+        <h2>Inventario</h2>
+        <p className="config-hint" style={{ marginBottom: 12 }}>
+          Importar productos desde un archivo Excel (.xlsx). Esto reemplaza todos los
+          productos existentes y borra las ventas anteriores. El stock queda en 0.
+        </p>
+        <button className="btn-ghost" onClick={importarInventario} disabled={importando}>
+          {importando ? 'Importando…' : 'Importar desde Excel'}
+        </button>
+      </section>
 
       <section className="config-section">
         <h2>Tiquetera</h2>

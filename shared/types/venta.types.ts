@@ -15,6 +15,18 @@ export interface Usuario {
   created_at: string
 }
 
+export interface UsuarioCreateInput {
+  nombre: string
+  pin: string         // 4 dígitos
+  rol?: Rol           // por defecto 'cajero'
+}
+
+export interface UsuarioUpdateInput {
+  id: number
+  nombre?: string
+  pin?: string        // si viene vacío/undefined, no se cambia
+}
+
 export interface TurnoCaja {
   id: number
   usuario_id: number
@@ -78,6 +90,7 @@ export interface ItemCarrito {
   cantidad: number
   precio_unitario: number
   subtotal: number
+  es_manual?: boolean   // monto cargado a mano (producto sin código de barras)
 }
 
 export interface CrearVentaInput {
@@ -88,6 +101,7 @@ export interface CrearVentaInput {
     cantidad: number
     precio_unitario: number   // snapshot del precio al momento de venta
     descuento_item?: number
+    es_manual?: boolean       // monto manual: se asigna al producto genérico y no descuenta stock
   }>
   metodo_pago: MetodoPago
   descuento?: number

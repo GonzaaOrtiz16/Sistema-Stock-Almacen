@@ -6,6 +6,11 @@ export const IPC = {
   PRODUCTOS_CREAR:            'productos:crear',
   PRODUCTOS_ACTUALIZAR:       'productos:actualizar',
   PRODUCTOS_ACTUALIZAR_MASIVO:'productos:actualizar-masivo',
+  PRODUCTOS_AGREGAR_STOCK:    'productos:agregar-stock',
+  PRODUCTOS_IMPORTAR_EXCEL:   'productos:importar-excel',
+  PRODUCTOS_PENDIENTES_LISTAR:   'productos:pendientes-listar',
+  PRODUCTOS_PENDIENTES_AGREGAR:  'productos:pendientes-agregar',
+  PRODUCTOS_PENDIENTES_ELIMINAR: 'productos:pendientes-eliminar',
 
   // Ventas
   VENTAS_CREAR:               'ventas:crear',
@@ -18,6 +23,9 @@ export const IPC = {
   AUTH_LISTAR_USUARIOS:       'auth:listar-usuarios',
   AUTH_LOGIN:                 'auth:login',
   AUTH_LOGOUT:                'auth:logout',
+  USUARIOS_LISTAR:            'usuarios:listar',
+  USUARIOS_CREAR:             'usuarios:crear',
+  USUARIOS_ACTUALIZAR:        'usuarios:actualizar',
   CAJA_ABRIR:                 'caja:abrir',
   CAJA_CERRAR:                'caja:cerrar',
   CAJA_TURNO_ACTIVO:          'caja:turno-activo',

@@ -3,9 +3,12 @@ import { useCajaStore, type AdminPage } from './store/cajaStore'
 import { useSyncStore } from './store/syncStore'
 import LoginPin from './modules/auth/LoginPin'
 import AperturaCaja from './modules/caja/AperturaCaja'
+import TurnoExistente from './modules/caja/TurnoExistente'
 import CheckoutPage from './modules/checkout/CheckoutPage'
 import ProductosPage from './modules/inventario/ProductosPage'
+import AgregarStockPage from './modules/inventario/AgregarStockPage'
 import ReportesPage from './modules/reportes/ReportesPage'
+import UsuariosPage from './modules/usuarios/UsuariosPage'
 import ConfiguracionPage from './modules/config/ConfiguracionPage'
 
 // ─── Layout de administrador ─────────────────────────────────────────────────
@@ -17,7 +20,10 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
   const navItems: Array<{ page: AdminPage; label: string }> = [
     { page: 'checkout',   label: 'Caja' },
     { page: 'inventario', label: 'Inventario' },
+    { page: 'stock',      label: 'Ingreso Stock' },
     { page: 'reportes',   label: 'Reportes' },
+    // Gestión de usuarios solo para administradores
+    ...(usuario?.rol === 'admin' ? [{ page: 'usuarios' as AdminPage, label: 'Usuarios' }] : []),
     { page: 'config',     label: 'Configuración' },
   ]
 
@@ -54,7 +60,7 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
 // ─── Router principal ────────────────────────────────────────────────────────
 
 export default function App() {
-  const { usuario, turnoActivo, adminPage } = useCajaStore()
+  const { usuario, turnoActivo, turnoPendiente, adminPage } = useCajaStore()
   const { setInfo } = useSyncStore()
 
   // Suscribir a eventos de sync desde el proceso main
@@ -73,6 +79,9 @@ export default function App() {
   // Guard: sin usuario → pantalla de login
   if (!usuario) return <LoginPin />
 
+  // Guard: hay un turno abierto previo sin cerrar → dejar elegir qué hacer
+  if (turnoActivo && turnoPendiente) return <TurnoExistente />
+
   // Guard: usuario sin turno abierto → apertura de caja
   if (!turnoActivo) return <AperturaCaja />
 
@@ -84,7 +93,9 @@ export default function App() {
     <AdminLayout>
       {adminPage === 'checkout'   && <CheckoutPage />}
       {adminPage === 'inventario' && <ProductosPage />}
+      {adminPage === 'stock'      && <AgregarStockPage />}
       {adminPage === 'reportes'   && <ReportesPage />}
+      {adminPage === 'usuarios'   && <UsuariosPage />}
       {adminPage === 'config'     && <ConfiguracionPage />}
     </AdminLayout>
   )

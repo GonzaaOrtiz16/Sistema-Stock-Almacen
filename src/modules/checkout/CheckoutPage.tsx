@@ -3,17 +3,21 @@ import { useCartStore, selectSubtotal, selectTotal } from '../../store/cartStore
 import { useCajaStore } from '../../store/cajaStore'
 import { useBarcode } from '../../hooks/useBarcode'
 import { useToast } from '../../components/ui'
-import type { Producto } from '@shared/types/producto.types'
+import type { Producto, PendienteCodigo } from '@shared/types/producto.types'
 import type { ItemCarrito, Venta, LineaVenta } from '@shared/types/venta.types'
 import CartItem from './CartItem'
 import PaymentModal from './PaymentModal'
 import AnulacionModal from './AnulacionModal'
+import MontoManualModal from './MontoManualModal'
+import PrecioProductoModal from './PrecioProductoModal'
+import AltaRapidaModal from './AltaRapidaModal'
 import CierreCaja from '../caja/CierreCaja'
+import UsuarioForm from '../usuarios/UsuarioForm'
 import { formatPrecio, formatHora } from '../../utils/format'
 
 export default function CheckoutPage() {
   const { items, addItem, updateCantidad, removeItem, clear } = useCartStore()
-  const { usuario, turnoActivo } = useCajaStore()
+  const { usuario, turnoActivo, setUsuario } = useCajaStore()
   const subtotal = useCartStore(selectSubtotal)
   const total    = useCartStore(selectTotal)
   const { show } = useToast()
@@ -23,6 +27,10 @@ export default function CheckoutPage() {
   const [selectedIdx,  setSelectedIdx]  = useState<number | null>(null)
   const [scanError,    setScanError]    = useState('')
   const [showPayment,  setShowPayment]  = useState(false)
+  const [showManual,   setShowManual]   = useState(false)
+  const [precioPend,   setPrecioPend]   = useState<Producto | null>(null)
+  const [pendientes,   setPendientes]   = useState<PendienteCodigo[]>([])
+  const [altaCodigo,   setAltaCodigo]   = useState<string | null>(null)
   const [anularVenta,  setAnularVenta]  = useState<Venta | null>(null)
   const [historial,    setHistorial]    = useState<Venta[]>([])
   const [expandido,    setExpandido]    = useState<number | null>(null)
@@ -30,6 +38,7 @@ export default function CheckoutPage() {
   const [filtroMonto,  setFiltroMonto]  = useState('')
   const [soloAnuladas, setSoloAnuladas] = useState(false)
   const [showCierre,   setShowCierre]   = useState(false)
+  const [showPerfil,   setShowPerfil]   = useState(false)
 
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -87,12 +96,28 @@ export default function CheckoutPage() {
     return true
   })
 
+  // ── Códigos pendientes (agregado rápido) ───────────────────────────────────
+  useEffect(() => {
+    window.electronAPI.productos.pendientesListar().then(setPendientes)
+  }, [])
+
   // ── Barcode scanner ────────────────────────────────────────────────────────
   const handleScan = useCallback(async (barcode: string) => {
+    // Las teclas del lector también caen en el buscador: limpiarlo en cada escaneo
+    setQuery('')
+    setResults([])
     const producto = await window.electronAPI.productos.buscarBarcode(barcode)
     if (!producto) {
-      setScanError(`Código no encontrado: ${barcode}`)
+      // No interrumpir la venta: guardar el código para darlo de alta después
+      const lista = await window.electronAPI.productos.pendientesAgregar(barcode)
+      setPendientes(lista)
+      setScanError(`Código sin producto: ${barcode} · guardado en Agregado rápido`)
       setTimeout(() => setScanError(''), 3000)
+      return
+    }
+    // Producto sin precio: pedirlo al instante antes de agregarlo a la venta
+    if (producto.precio_venta <= 0) {
+      setPrecioPend(producto)
       return
     }
     addItem(productoToItem(producto))
@@ -100,6 +125,47 @@ export default function CheckoutPage() {
   }, [addItem, show])
 
   useBarcode(handleScan)
+
+  // Confirmar el precio de un producto que no lo tenía: guardarlo y agregarlo
+  const confirmarPrecio = useCallback(async (precio: number) => {
+    if (!precioPend) return
+    const actualizado = await window.electronAPI.productos.actualizar({
+      id: precioPend.id,
+      precio_venta: precio,
+    })
+    addItem(productoToItem(actualizado))
+    setPrecioPend(null)
+    show(`+ ${actualizado.nombre} · precio guardado`, 'success')
+  }, [precioPend, addItem, show])
+
+  // Agregar un monto manual (producto sin código) al carrito
+  const agregarMontoManual = useCallback((monto: number, descripcion: string) => {
+    addItem({
+      producto_id:     -Date.now(),   // id sintético único: no se fusiona con otros ítems
+      codigo_barras:   null,
+      nombre:          descripcion || 'Monto manual',
+      cantidad:        1,
+      precio_unitario: monto,
+      subtotal:        monto,
+      es_manual:       true,
+    })
+    setShowManual(false)
+    show(`+ ${formatPrecio(monto)}`, 'success')
+  }, [addItem, show])
+
+  // Producto dado de alta desde un código pendiente
+  const onAltaRapida = useCallback(async (codigo: string) => {
+    const lista = await window.electronAPI.productos.pendientesEliminar(codigo)
+    setPendientes(lista)
+    setAltaCodigo(null)
+    show('Producto creado', 'success')
+  }, [show])
+
+  // Descartar un código pendiente sin crear producto
+  const descartarPendiente = useCallback(async (codigo: string) => {
+    const lista = await window.electronAPI.productos.pendientesEliminar(codigo)
+    setPendientes(lista)
+  }, [])
 
   // ── Búsqueda por nombre ────────────────────────────────────────────────────
   useEffect(() => {
@@ -125,16 +191,29 @@ export default function CheckoutPage() {
       const tag = (document.activeElement as HTMLElement)?.tagName.toLowerCase()
       const inInput = tag === 'input' || tag === 'textarea'
 
+      const modalAbierto = showPayment || anularVenta || showManual || precioPend || altaCodigo || showPerfil
+
       // F1: cobrar (siempre activo salvo en inputs)
       if (e.key === 'F1') {
         e.preventDefault()
-        if (items.length > 0 && !showPayment && !anularVenta) setShowPayment(true)
+        if (items.length > 0 && !modalAbierto) setShowPayment(true)
+        return
+      }
+
+      // F2: agregar un monto manual (producto sin código de barras)
+      if (e.key === 'F2') {
+        e.preventDefault()
+        if (!modalAbierto) setShowManual(true)
         return
       }
 
       // Escape: cerrar modales / limpiar búsqueda
       if (e.key === 'Escape') {
         if (showPayment)  { setShowPayment(false);  return }
+        if (showManual)   { setShowManual(false);   return }
+        if (precioPend)   { setPrecioPend(null);    return }
+        if (altaCodigo)   { setAltaCodigo(null);    return }
+        if (showPerfil)   { setShowPerfil(false);   return }
         if (anularVenta)  { setAnularVenta(null);   return }
         if (results.length || query) { setQuery(''); setResults([]); return }
         setSelectedIdx(null)
@@ -182,7 +261,7 @@ export default function CheckoutPage() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [items, selectedIdx, showPayment, anularVenta, query, results.length, updateCantidad, removeItem])
+  }, [items, selectedIdx, showPayment, showManual, precioPend, altaCodigo, showPerfil, anularVenta, query, results.length, updateCantidad, removeItem])
 
   if (showCierre) return <CierreCaja onCancel={() => setShowCierre(false)} />
 
@@ -193,7 +272,10 @@ export default function CheckoutPage() {
       <header className="checkout-header">
         <span className="checkout-title">Almacén Minimercado Gabriela</span>
         <span className="checkout-user">{usuario?.nombre} · turno #{turnoActivo?.id}</span>
-        <span className="checkout-hint">F1=cobrar · ↑↓=seleccionar · +−=cantidad · Del=quitar</span>
+        <span className="checkout-hint">F1=cobrar · F2=monto manual · ↑↓=seleccionar · +−=cantidad · Del=quitar</span>
+        <button className="btn-ghost checkout-perfil" onClick={() => setShowPerfil(true)}>
+          Mi perfil
+        </button>
         <button className="btn-ghost checkout-cierre" onClick={() => setShowCierre(true)}>
           Cerrar turno
         </button>
@@ -247,6 +329,12 @@ export default function CheckoutPage() {
             </div>
             <div className="cart-actions">
               <button
+                className="btn-ghost btn-manual"
+                onClick={() => setShowManual(true)}
+              >
+                Monto manual <kbd>F2</kbd>
+              </button>
+              <button
                 className="btn-pay"
                 onClick={() => setShowPayment(true)}
                 disabled={items.length === 0}
@@ -285,6 +373,35 @@ export default function CheckoutPage() {
           )}
 
           {scanError && <p className="scan-error">{scanError}</p>}
+
+          {/* ─ Agregado rápido: códigos escaneados que no existen ─ */}
+          {pendientes.length > 0 && (
+            <div className="pendientes-panel">
+              <div className="pendientes-header">
+                <span>Agregado rápido</span>
+                <span className="pendientes-count">{pendientes.length}</span>
+              </div>
+              <div className="pendientes-list">
+                {pendientes.map((p) => (
+                  <div key={p.id} className="pendiente-item">
+                    <span className="pendiente-code">{p.codigo_barras}</span>
+                    {p.veces > 1 && <span className="pendiente-veces">×{p.veces}</span>}
+                    <button
+                      className="pendiente-add"
+                      onClick={() => setAltaCodigo(p.codigo_barras)}
+                    >
+                      + Agregar
+                    </button>
+                    <button
+                      className="pendiente-del"
+                      title="Descartar"
+                      onClick={() => descartarPendiente(p.codigo_barras)}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ─ Historial de ventas del turno ─ */}
           <div className="historial-panel">
@@ -421,6 +538,42 @@ export default function CheckoutPage() {
             show('Venta completada', 'success')
           }}
           onClose={() => setShowPayment(false)}
+        />
+      )}
+
+      {showManual && (
+        <MontoManualModal
+          onConfirm={agregarMontoManual}
+          onClose={() => setShowManual(false)}
+        />
+      )}
+
+      {precioPend && (
+        <PrecioProductoModal
+          producto={precioPend}
+          onConfirm={confirmarPrecio}
+          onClose={() => setPrecioPend(null)}
+        />
+      )}
+
+      {altaCodigo && (
+        <AltaRapidaModal
+          codigo={altaCodigo}
+          onSuccess={onAltaRapida}
+          onClose={() => setAltaCodigo(null)}
+        />
+      )}
+
+      {showPerfil && usuario && (
+        <UsuarioForm
+          usuario={usuario}
+          selfEdit
+          onSuccess={(u) => {
+            setUsuario({ ...usuario, nombre: u.nombre })
+            setShowPerfil(false)
+            show('Perfil actualizado', 'success')
+          }}
+          onClose={() => setShowPerfil(false)}
         />
       )}
 

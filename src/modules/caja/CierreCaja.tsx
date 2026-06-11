@@ -5,9 +5,11 @@ import { formatPrecio, formatFecha } from '../../utils/format'
 
 interface Props {
   onCancel: () => void
+  /** Si se provee, se ejecuta tras cerrar el turno en vez de cerrar sesión */
+  onClosed?: () => void
 }
 
-export default function CierreCaja({ onCancel }: Props) {
+export default function CierreCaja({ onCancel, onClosed }: Props) {
   const { turnoActivo, logout } = useCajaStore()
 
   const [resumen,        setResumen]        = useState<ResumenTurno | null>(null)
@@ -38,7 +40,8 @@ export default function CierreCaja({ onCancel }: Props) {
         montoNum,
         observaciones || undefined,
       )
-      logout()
+      if (onClosed) onClosed()
+      else logout()
     } catch {
       setError('Error al cerrar el turno — verificá los logs')
     } finally {

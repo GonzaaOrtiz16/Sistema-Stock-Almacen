@@ -1,6 +1,6 @@
 {
   "name": "almacen-gabriela",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Sistema POS - Almacén Minimercado Gabriela",
   "author": "Almacén Minimercado Gabriela",
@@ -20,6 +20,7 @@
     "electron-updater": "^6.3.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "xlsx": "^0.18.5",
     "zustand": "^5.0.1"
   },
   "devDependencies": {

@@ -1,9 +1,10 @@
 import type {
-  Producto, ProductoCreateInput, ProductoUpdateInput, ActualizacionMasiva,
+  Producto, ProductoCreateInput, ProductoUpdateInput, ActualizacionMasiva, PendienteCodigo,
 } from '../shared/types/producto.types'
 import type {
   Venta, TurnoCaja, Usuario, CrearVentaInput,
   AnulacionRequest, AnulacionLocal, ResumenTurno, LineaVenta,
+  UsuarioCreateInput, UsuarioUpdateInput,
 } from '../shared/types/venta.types'
 import type { SyncInfo, SyncProgress } from '../shared/types/sync.types'
 import type { ResumenPeriodo, VentaDiaria, TopProducto } from '../shared/types/reporte.types'
@@ -19,6 +20,11 @@ declare global {
         crear:            (i: ProductoCreateInput)      => Promise<Producto>
         actualizar:       (i: ProductoUpdateInput)      => Promise<Producto>
         actualizarMasivo: (i: ActualizacionMasiva)      => Promise<number>
+        agregarStock:     (id: number, cantidad: number) => Promise<Producto>
+        importarExcel:    ()                             => Promise<{ ok: boolean; importados?: number; error?: string }>
+        pendientesListar:   ()           => Promise<PendienteCodigo[]>
+        pendientesAgregar:  (c: string)  => Promise<PendienteCodigo[]>
+        pendientesEliminar: (c: string)  => Promise<PendienteCodigo[]>
       }
       ventas: {
         crear:          (i: CrearVentaInput)    => Promise<Venta>
@@ -37,6 +43,11 @@ declare global {
         listarUsuarios: () => Promise<Array<{ id: number; nombre: string; rol: string }>>
         login:  (pin: string)  => Promise<Usuario | null>
         logout: ()             => Promise<void>
+      }
+      usuarios: {
+        listar:     ()                      => Promise<Usuario[]>
+        crear:      (i: UsuarioCreateInput) => Promise<Usuario>
+        actualizar: (i: UsuarioUpdateInput) => Promise<Usuario>
       }
       printer: {
         listar:        () => Promise<{ ok: boolean; data?: ImpresoraInfo[]; error?: string }>

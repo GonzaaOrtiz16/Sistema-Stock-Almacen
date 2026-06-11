@@ -51,9 +51,10 @@ export default function PaymentModal({ onSuccess, onClose }: Props) {
         turno_id:   turnoActivo.id,
         usuario_id: usuario.id,
         items: items.map((i) => ({
-          producto_id:    i.producto_id,
+          producto_id:    i.es_manual ? 0 : i.producto_id,
           cantidad:       i.cantidad,
           precio_unitario: i.precio_unitario,
+          es_manual:      i.es_manual,
         })),
         metodo_pago:    metodo,
         descuento:      descuento,

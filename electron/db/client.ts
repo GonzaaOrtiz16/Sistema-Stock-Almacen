@@ -47,6 +47,7 @@ function applyMigrations(database: Database.Database): void {
 
   const migrations: Array<{ name: string; sql: string }> = [
     { name: '001_initial', sql: MIGRATION_001 },
+    { name: '002_pendientes_codigo', sql: MIGRATION_002 },
   ]
 
   const runMigration = database.transaction((name: string, sql: string) => {
@@ -190,4 +191,15 @@ CREATE TABLE IF NOT EXISTS config (
 );
 
 INSERT OR IGNORE INTO config VALUES ('last_poll_ts', '1970-01-01T00:00:00.000Z');
+`
+
+// Códigos escaneados en caja que no existen todavía: quedan "pendientes" para
+// darlos de alta después, sin interrumpir la venta. Tabla local (no se sincroniza).
+const MIGRATION_002 = `
+CREATE TABLE IF NOT EXISTS pendientes_codigo (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  codigo_barras TEXT NOT NULL UNIQUE,
+  veces         INTEGER NOT NULL DEFAULT 1,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
 `

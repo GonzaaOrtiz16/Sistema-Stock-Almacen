@@ -1,11 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/constants'
 import type {
-  Producto, ProductoCreateInput, ProductoUpdateInput, ActualizacionMasiva,
+  Producto, ProductoCreateInput, ProductoUpdateInput, ActualizacionMasiva, PendienteCodigo,
 } from '../shared/types/producto.types'
 import type {
   Venta, TurnoCaja, Usuario, CrearVentaInput,
   AnulacionRequest, AnulacionLocal, ResumenTurno, LineaVenta,
+  UsuarioCreateInput, UsuarioUpdateInput,
 } from '../shared/types/venta.types'
 import type { SyncInfo, SyncProgress } from '../shared/types/sync.types'
 import type { ResumenPeriodo, VentaDiaria, TopProducto } from '../shared/types/reporte.types'
@@ -19,6 +20,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     crear:           (i: ProductoCreateInput)     => ipcRenderer.invoke(IPC.PRODUCTOS_CREAR,             i) as Promise<Producto>,
     actualizar:      (i: ProductoUpdateInput)     => ipcRenderer.invoke(IPC.PRODUCTOS_ACTUALIZAR,        i) as Promise<Producto>,
     actualizarMasivo:(i: ActualizacionMasiva)     => ipcRenderer.invoke(IPC.PRODUCTOS_ACTUALIZAR_MASIVO, i) as Promise<number>,
+    agregarStock:    (id: number, cantidad: number) => ipcRenderer.invoke(IPC.PRODUCTOS_AGREGAR_STOCK, id, cantidad) as Promise<import('../shared/types/producto.types').Producto>,
+    importarExcel:   ()                             => ipcRenderer.invoke(IPC.PRODUCTOS_IMPORTAR_EXCEL) as Promise<{ ok: boolean; importados?: number; error?: string }>,
+    pendientesListar:   ()             => ipcRenderer.invoke(IPC.PRODUCTOS_PENDIENTES_LISTAR)          as Promise<PendienteCodigo[]>,
+    pendientesAgregar:  (c: string)    => ipcRenderer.invoke(IPC.PRODUCTOS_PENDIENTES_AGREGAR,  c)    as Promise<PendienteCodigo[]>,
+    pendientesEliminar: (c: string)    => ipcRenderer.invoke(IPC.PRODUCTOS_PENDIENTES_ELIMINAR, c)    as Promise<PendienteCodigo[]>,
   },
 
   ventas: {
@@ -40,6 +46,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listarUsuarios: () => ipcRenderer.invoke(IPC.AUTH_LISTAR_USUARIOS) as Promise<Array<{ id: number; nombre: string; rol: string }>>,
     login:  (pin: string) => ipcRenderer.invoke(IPC.AUTH_LOGIN,  pin) as Promise<Usuario | null>,
     logout: ()            => ipcRenderer.invoke(IPC.AUTH_LOGOUT)      as Promise<void>,
+  },
+
+  usuarios: {
+    listar:     ()                      => ipcRenderer.invoke(IPC.USUARIOS_LISTAR)         as Promise<Usuario[]>,
+    crear:      (i: UsuarioCreateInput) => ipcRenderer.invoke(IPC.USUARIOS_CREAR,      i)  as Promise<Usuario>,
+    actualizar: (i: UsuarioUpdateInput) => ipcRenderer.invoke(IPC.USUARIOS_ACTUALIZAR, i)  as Promise<Usuario>,
   },
 
   printer: {

@@ -16,6 +16,7 @@ export default function ConfiguracionPage() {
   const [guardando, setGuardando] = useState(false)
   const [probando, setProbando] = useState(false)
   const [importando, setImportando] = useState(false)
+  const [backupeando, setBackupeando] = useState(false)
 
   useEffect(() => {
     ;(async () => {
@@ -52,6 +53,14 @@ export default function ConfiguracionPage() {
     else if (res.error !== 'Cancelado') show(res.error ?? 'Error al importar', 'error')
   }
 
+  async function hacerBackup() {
+    setBackupeando(true)
+    const res = await window.electronAPI.backup.ejecutar()
+    setBackupeando(false)
+    if (res.ok) show('Backup creado en Documentos\\Almacén Gabriela\\Backups', 'success')
+    else show(res.error ?? 'No se pudo crear el backup', 'error')
+  }
+
   async function imprimirPrueba() {
     setProbando(true)
     const res = await window.electronAPI.printer.test(config)
@@ -74,6 +83,19 @@ export default function ConfiguracionPage() {
         </p>
         <button className="btn-ghost" onClick={importarInventario} disabled={importando}>
           {importando ? 'Importando…' : 'Importar desde Excel'}
+        </button>
+      </section>
+
+      <section className="config-section">
+        <h2>Copias de seguridad</h2>
+        <p className="config-hint" style={{ marginBottom: 12 }}>
+          Todos los días, al abrir el almacén, se guarda automáticamente una copia de
+          toda la data (ventas, stock e inventario) en <strong>Documentos\Almacén Gabriela\Backups</strong>:
+          la base completa (para restaurar) y un Excel legible con Resumen, Ventas e Inventario.
+          Se conservan los últimos 30 días. Podés generar una copia manual cuando quieras:
+        </p>
+        <button className="btn-ghost" onClick={hacerBackup} disabled={backupeando}>
+          {backupeando ? 'Generando backup…' : 'Hacer backup ahora'}
         </button>
       </section>
 

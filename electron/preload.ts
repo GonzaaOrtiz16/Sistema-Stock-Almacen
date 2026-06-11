@@ -97,6 +97,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     topProductos:  (d: string, h: string) => ipcRenderer.invoke(IPC.REPORTES_TOP_PRODUCTOS,  d, h) as Promise<TopProducto[]>,
   },
 
+  backup: {
+    ejecutar: () => ipcRenderer.invoke(IPC.BACKUP_EJECUTAR) as Promise<{ ok: boolean; carpeta?: string; archivos?: string[]; error?: string }>,
+  },
+
   updater: {
     onAvailable:  (cb: (info: { version: string }) => void) => { ipcRenderer.on(IPC.UPDATER_AVAILABLE,  (_e, i) => cb(i)) },
     onDescargado: (cb: (info: { version: string }) => void) => { ipcRenderer.on(IPC.UPDATER_DOWNLOADED, (_e, i) => cb(i)) },

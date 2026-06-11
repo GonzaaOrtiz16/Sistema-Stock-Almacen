@@ -56,6 +56,9 @@ export const IPC = {
   UPDATER_DOWNLOADED:         'updater:downloaded',
   UPDATER_INSTALL:            'updater:install',
 
+  // Backups
+  BACKUP_EJECUTAR:            'backup:ejecutar',
+
   // Impresión (tiquetera)
   PRINTER_LISTAR:             'printer:listar',
   PRINTER_CONFIG_GET:         'printer:config-get',

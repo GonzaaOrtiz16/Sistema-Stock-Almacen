@@ -12,6 +12,8 @@ import { registerUsuariosHandlers } from './ipc/usuarios.ipc'
 import { registerSyncHandlers } from './ipc/sync.ipc'
 import { registerReportesHandlers } from './ipc/reportes.ipc'
 import { registerPrinterHandlers } from './ipc/printer.ipc'
+import { registerBackupHandlers } from './ipc/backup.ipc'
+import { startBackupScheduler, stopBackupScheduler } from './services/backup/BackupService'
 import { IPC } from '../shared/constants'
 
 let mainWindow: BrowserWindow | null = null
@@ -70,6 +72,7 @@ function registerIpcHandlers(): void {
   registerSyncHandlers(syncEngine!)
   registerReportesHandlers()
   registerPrinterHandlers()
+  registerBackupHandlers()
 
   // Instalar actualización cuando el renderer lo solicite
   ipcMain.on(IPC.UPDATER_INSTALL, () => installUpdate())
@@ -86,6 +89,9 @@ app.whenReady().then(() => {
   registerIpcHandlers()
   syncEngine.start()
 
+  // Backup diario automático de toda la data (ventas, stock y reportes)
+  startBackupScheduler()
+
   createWindow()
 
   // Auto-updater (solo en producción)
@@ -96,6 +102,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   syncEngine?.stop()
+  stopBackupScheduler()
   closeDb()
   log.info('[Main] Cerrando aplicación')
   if (process.platform !== 'darwin') app.quit()

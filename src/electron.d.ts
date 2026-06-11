@@ -77,6 +77,9 @@ declare global {
         historial:    (desde: string, hasta: string) => Promise<VentaDiaria[]>
         topProductos: (desde: string, hasta: string) => Promise<TopProducto[]>
       }
+      backup: {
+        ejecutar: () => Promise<{ ok: boolean; carpeta?: string; archivos?: string[]; error?: string }>
+      }
       updater: {
         onAvailable:     (cb: (info: { version: string }) => void) => void
         onDescargado:    (cb: (info: { version: string }) => void) => void

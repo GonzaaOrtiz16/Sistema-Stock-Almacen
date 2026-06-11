@@ -1,0 +1,205 @@
+import { app } from 'electron'
+import { join } from 'path'
+import { existsSync, mkdirSync, readdirSync, rmSync } from 'fs'
+import type Database from 'better-sqlite3'
+import * as XLSX from 'xlsx'
+import { getDb } from '../../db/client'
+import log from '../../utils/logger'
+
+// Backup diario automático de toda la data (ventas, stock/inventario y resumen
+// de reportes). Genera dos cosas en Documentos\Almacén Gabriela\Backups\<fecha>:
+//   1. gabriela_<fecha>.db  → copia completa de la base (permite restaurar todo)
+//   2. almacen_<fecha>.xlsx → Excel legible (Resumen, Ventas, Inventario)
+
+const RETENTION_DAYS    = 30
+const CHECK_INTERVAL_MS  = 6 * 60 * 60 * 1000 // cada 6 h
+const TZ_OFFSET_HORAS    = '-3 hours'         // Argentina (UTC-3, sin horario de verano)
+
+export interface BackupResult {
+  ok: boolean
+  carpeta?: string
+  archivos?: string[]
+  error?: string
+}
+
+function fechaLocal(d = new Date()): string {
+  const y   = d.getFullYear()
+  const m   = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function round2(n: number): number {
+  return Math.round((Number(n) + Number.EPSILON) * 100) / 100
+}
+
+export function getBackupDir(): string {
+  return join(app.getPath('documents'), 'Almacén Gabriela', 'Backups')
+}
+
+// ── Scheduler ────────────────────────────────────────────────────────────────
+
+let timer: ReturnType<typeof setInterval> | null = null
+
+export function startBackupScheduler(): void {
+  // Apenas arranca + cada 6 h. Cubre la apertura diaria del almacén y el caso de
+  // que la app quede abierta cruzando la medianoche.
+  runDailyBackupIfNeeded()
+  timer = setInterval(runDailyBackupIfNeeded, CHECK_INTERVAL_MS)
+}
+
+export function stopBackupScheduler(): void {
+  if (timer) { clearInterval(timer); timer = null }
+}
+
+export function runDailyBackupIfNeeded(): void {
+  try {
+    const hoy = fechaLocal()
+    const yaHecho = existsSync(join(getBackupDir(), hoy, `gabriela_${hoy}.db`))
+    if (yaHecho) return
+
+    ejecutarBackup().then((r) => {
+      if (r.ok) log.info(`[Backup] Backup diario OK -> ${r.carpeta}`)
+      else      log.error(`[Backup] Backup diario falló: ${r.error}`)
+    })
+  } catch (err) {
+    log.error(`[Backup] Error verificando backup diario: ${(err as Error).message}`)
+  }
+}
+
+// ── Ejecución ────────────────────────────────────────────────────────────────
+
+export async function ejecutarBackup(): Promise<BackupResult> {
+  try {
+    const db   = getDb()
+    const hoy  = fechaLocal()
+    const carpeta = join(getBackupDir(), hoy)
+    mkdirSync(carpeta, { recursive: true })
+
+    const dbDest   = join(carpeta, `gabriela_${hoy}.db`)
+    const xlsxDest = join(carpeta, `almacen_${hoy}.xlsx`)
+
+    // 1) Copia consistente de la base (online backup, seguro aunque esté en WAL)
+    await db.backup(dbDest)
+
+    // 2) Excel legible
+    construirExcel(db, xlsxDest)
+
+    // 3) Retención: borrar backups más viejos que RETENTION_DAYS
+    limpiarAntiguos()
+
+    return { ok: true, carpeta, archivos: [`gabriela_${hoy}.db`, `almacen_${hoy}.xlsx`] }
+  } catch (err) {
+    log.error(`[Backup] Error ejecutando backup: ${(err as Error).message}`)
+    return { ok: false, error: (err as Error).message }
+  }
+}
+
+function construirExcel(db: Database.Database, destino: string): void {
+  // ── Inventario (stock actual completo) ──
+  const inventario = db.prepare(`
+    SELECT
+      p.codigo_barras                                       AS "Código",
+      p.nombre                                              AS "Producto",
+      c.nombre                                              AS "Categoría",
+      p.unidad                                              AS "Unidad",
+      p.precio_costo                                        AS "Precio costo",
+      p.precio_venta                                        AS "Precio venta",
+      p.stock_actual                                        AS "Stock",
+      p.stock_minimo                                        AS "Stock mínimo",
+      ROUND(COALESCE(p.precio_venta, 0) * p.stock_actual, 2) AS "Valor stock"
+    FROM productos p
+    LEFT JOIN categorias c ON c.id = p.categoria_id
+    WHERE p.activo = 1
+    ORDER BY p.nombre COLLATE NOCASE
+  `).all()
+
+  // ── Ventas completadas (hora local AR) ──
+  const ventas = db.prepare(`
+    SELECT
+      v.id                                AS "N° venta",
+      DATE(v.timestamp, '${TZ_OFFSET_HORAS}') AS "Fecha",
+      TIME(v.timestamp, '${TZ_OFFSET_HORAS}') AS "Hora",
+      u.nombre                            AS "Cajero",
+      v.metodo_pago                       AS "Método",
+      v.subtotal                          AS "Subtotal",
+      v.descuento                         AS "Descuento",
+      v.total                             AS "Total"
+    FROM ventas v
+    LEFT JOIN usuarios u ON u.id = v.usuario_id
+    WHERE v.estado = 'completada'
+    ORDER BY v.timestamp DESC
+  `).all()
+
+  // ── Resumen ──
+  const inv = db.prepare(`
+    SELECT
+      COUNT(*)                                                  AS productos,
+      COALESCE(SUM(COALESCE(precio_venta,0) * stock_actual), 0) AS valor_venta,
+      COALESCE(SUM(COALESCE(precio_costo,0) * stock_actual), 0) AS valor_costo,
+      COALESCE(SUM(CASE WHEN stock_minimo > 0 AND stock_actual <= stock_minimo THEN 1 ELSE 0 END), 0) AS bajo_minimo,
+      COALESCE(SUM(CASE WHEN stock_actual <= 0 THEN 1 ELSE 0 END), 0) AS sin_stock
+    FROM productos WHERE activo = 1
+  `).get() as {
+    productos: number; valor_venta: number; valor_costo: number; bajo_minimo: number; sin_stock: number
+  }
+
+  const vtot = db.prepare(`
+    SELECT COUNT(*) AS cant, COALESCE(SUM(total), 0) AS total
+    FROM ventas WHERE estado = 'completada'
+  `).get() as { cant: number; total: number }
+
+  const metodos = db.prepare(`
+    SELECT metodo_pago AS metodo, COUNT(*) AS cant, COALESCE(SUM(total), 0) AS total
+    FROM ventas WHERE estado = 'completada'
+    GROUP BY metodo_pago ORDER BY total DESC
+  `).all() as Array<{ metodo: string; cant: number; total: number }>
+
+  const resumen: Array<Array<string | number>> = [
+    ['Backup — Almacén Minimercado Gabriela'],
+    ['Generado', new Date().toLocaleString('es-AR')],
+    [],
+    ['INVENTARIO'],
+    ['Productos activos', inv.productos],
+    ['Valor del stock (a precio de venta)', round2(inv.valor_venta)],
+    ['Valor del stock (a costo)', round2(inv.valor_costo)],
+    ['Productos bajo el mínimo', inv.bajo_minimo],
+    ['Productos sin stock', inv.sin_stock],
+    [],
+    ['VENTAS (histórico de completadas)'],
+    ['Cantidad de ventas', vtot.cant],
+    ['Total facturado', round2(vtot.total)],
+    [],
+    ['VENTAS POR MÉTODO DE PAGO'],
+    ['Método', 'Cantidad', 'Total'],
+    ...metodos.map((m) => [m.metodo, m.cant, round2(m.total)]),
+  ]
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen),       'Resumen')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ventas),       'Ventas')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(inventario),   'Inventario')
+  XLSX.writeFile(wb, destino)
+}
+
+function limpiarAntiguos(): void {
+  try {
+    const dir = getBackupDir()
+    if (!existsSync(dir)) return
+
+    const carpetas = readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(e.name))
+      .map((e) => e.name)
+      .sort() // ascendente: las fechas ISO ordenan cronológicamente
+
+    const sobran = carpetas.length - RETENTION_DAYS
+    if (sobran <= 0) return
+
+    for (const nombre of carpetas.slice(0, sobran)) {
+      rmSync(join(dir, nombre), { recursive: true, force: true })
+      log.info(`[Backup] Backup antiguo eliminado: ${nombre}`)
+    }
+  } catch (err) {
+    log.warn(`[Backup] No se pudieron limpiar backups antiguos: ${(err as Error).message}`)
+  }
+}

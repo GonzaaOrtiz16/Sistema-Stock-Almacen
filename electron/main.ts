@@ -75,6 +75,9 @@ function registerIpcHandlers(): void {
   registerPrinterHandlers()
   registerBackupHandlers()
 
+  // Versión actual de la app (para mostrarla en la interfaz)
+  ipcMain.handle(IPC.APP_VERSION, () => app.getVersion())
+
   // Instalar actualización cuando el renderer lo solicite
   ipcMain.on(IPC.UPDATER_INSTALL, () => installUpdate())
 }

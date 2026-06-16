@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useCajaStore, type AdminPage } from './store/cajaStore'
 import { useSyncStore } from './store/syncStore'
+import { useUpdateStore } from './store/updateStore'
 import LoginPin from './modules/auth/LoginPin'
 import AperturaCaja from './modules/caja/AperturaCaja'
 import TurnoExistente from './modules/caja/TurnoExistente'
@@ -11,6 +12,7 @@ import ReportesPage from './modules/reportes/ReportesPage'
 import UsuariosPage from './modules/usuarios/UsuariosPage'
 import ConfiguracionPage from './modules/config/ConfiguracionPage'
 import UpdateBanner from './components/UpdateBanner'
+import VersionBadge from './components/VersionBadge'
 
 // ─── Layout de administrador ─────────────────────────────────────────────────
 
@@ -63,6 +65,7 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
 export default function App() {
   const { usuario, turnoActivo, turnoPendiente, adminPage } = useCajaStore()
   const { setInfo } = useSyncStore()
+  const { setVersion, setDescargando, setListo } = useUpdateStore()
 
   // Suscribir a eventos de sync desde el proceso main
   useEffect(() => {
@@ -76,6 +79,15 @@ export default function App() {
     )
     return () => api.removeListeners()
   }, [setInfo])
+
+  // Versión instalada + eventos del auto-updater (una sola suscripción global)
+  useEffect(() => {
+    window.electronAPI.app.getVersion().then(setVersion).catch(() => {})
+    const api = window.electronAPI.updater
+    api.onAvailable((i) => setDescargando(i.version))
+    api.onDescargado((i) => setListo(i.version))
+    return () => api.removeListeners()
+  }, [setVersion, setDescargando, setListo])
 
   function renderContent() {
     // Guard: sin usuario → pantalla de login
@@ -108,6 +120,7 @@ export default function App() {
     <>
       <UpdateBanner />
       {renderContent()}
+      <VersionBadge />
     </>
   )
 }

@@ -80,6 +80,9 @@ declare global {
       backup: {
         ejecutar: () => Promise<{ ok: boolean; carpeta?: string; archivos?: string[]; error?: string }>
       }
+      app: {
+        getVersion: () => Promise<string>
+      }
       updater: {
         onAvailable:     (cb: (info: { version: string }) => void) => void
         onDescargado:    (cb: (info: { version: string }) => void) => void

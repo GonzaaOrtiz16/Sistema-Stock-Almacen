@@ -101,6 +101,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ejecutar: () => ipcRenderer.invoke(IPC.BACKUP_EJECUTAR) as Promise<{ ok: boolean; carpeta?: string; archivos?: string[]; error?: string }>,
   },
 
+  app: {
+    getVersion: () => ipcRenderer.invoke(IPC.APP_VERSION) as Promise<string>,
+  },
+
   updater: {
     onAvailable:  (cb: (info: { version: string }) => void) => { ipcRenderer.on(IPC.UPDATER_AVAILABLE,  (_e, i) => cb(i)) },
     onDescargado: (cb: (info: { version: string }) => void) => { ipcRenderer.on(IPC.UPDATER_DOWNLOADED, (_e, i) => cb(i)) },

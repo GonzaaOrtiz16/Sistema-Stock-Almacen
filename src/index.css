@@ -1294,3 +1294,57 @@ kbd {
   cursor: pointer;
 }
 .update-banner-btn:hover { filter: brightness(1.08); }
+
+/* ─── Insignia de versión (siempre visible) ─────────────────────────────── */
+.version-badge {
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #8a8aa0;
+  background: rgba(18, 18, 31, 0.85);
+  border: 1px solid #1e1e30;
+  border-radius: 999px;
+  user-select: none;
+  pointer-events: auto;
+}
+.version-badge.tiene-update {
+  color: #eaeaea;
+  border-color: #facc15;
+}
+.version-badge.clickable { cursor: pointer; }
+.version-badge.clickable:hover { background: rgba(40, 40, 60, 0.95); }
+
+.version-badge-update {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.version-badge-icon {
+  color: #facc15;
+  animation: version-badge-bob 1.4s ease-in-out infinite;
+}
+.version-badge-bang {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #1a1a1a;
+  background: #facc15;
+  border-radius: 50%;
+}
+@keyframes version-badge-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(2px); }
+}

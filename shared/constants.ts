@@ -56,6 +56,9 @@ export const IPC = {
   UPDATER_DOWNLOADED:         'updater:downloaded',
   UPDATER_INSTALL:            'updater:install',
 
+  // App / versión
+  APP_VERSION:                'app:version',
+
   // Backups
   BACKUP_EJECUTAR:            'backup:ejecutar',
 

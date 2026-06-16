@@ -8,9 +8,14 @@ type Vista = 'tabla' | 'form-nuevo' | 'form-editar' | 'bulk'
 type EstadoStock = 'ok' | 'bajo' | 'sin-stock'
 type Filtro = 'todos' | EstadoStock
 
+// Umbral general de stock bajo: cualquier producto con menos de estas unidades
+// se marca como "bajo" (además del mínimo propio que pueda tener cargado).
+const UMBRAL_STOCK_BAJO = 15
+
 // Clasifica un producto según su nivel de stock para el conteo y los colores.
 function estadoStock(p: Producto): EstadoStock {
   if (p.stock_actual <= 0) return 'sin-stock'
+  if (p.stock_actual < UMBRAL_STOCK_BAJO) return 'bajo'
   if (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo) return 'bajo'
   return 'ok'
 }

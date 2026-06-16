@@ -1,5 +1,6 @@
 import { BrowserWindow } from 'electron'
 import { createClient } from '@supabase/supabase-js'
+import WebSocket from 'ws'
 import { getDb } from '../../db/client'
 import { createVentasRepo } from '../../db/repositories/ventas.repo'
 import {
@@ -15,7 +16,14 @@ function makeClient() {
   const url = process.env.VITE_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return null
-  return createClient(url, key, { auth: { persistSession: false } })
+  return createClient(url, key, {
+    auth: { persistSession: false },
+    // Electron empaqueta Node 20, que no trae WebSocket nativo. supabase-js
+    // crea un cliente Realtime que falla al conectar sin él; le pasamos `ws`
+    // como transporte para evitarlo (este servicio solo usa REST + Edge Functions).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    realtime: { transport: WebSocket as any },
+  })
 }
 
 export class AnulacionService {

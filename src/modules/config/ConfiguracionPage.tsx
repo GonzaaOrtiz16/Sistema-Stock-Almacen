@@ -49,8 +49,16 @@ export default function ConfiguracionPage() {
     setImportando(true)
     const res = await window.electronAPI.productos.importarExcel()
     setImportando(false)
-    if (res.ok) show(`${res.importados} productos importados`, 'success')
-    else if (res.error !== 'Cancelado') show(res.error ?? 'Error al importar', 'error')
+    if (res.ok) {
+      const nuevos = res.importados ?? 0
+      const existentes = res.existentes ?? 0
+      show(
+        nuevos === 0
+          ? `No había productos nuevos (${existentes} ya existían)`
+          : `${nuevos} productos nuevos agregados${existentes ? ` · ${existentes} ya existían` : ''}`,
+        'success',
+      )
+    } else if (res.error !== 'Cancelado') show(res.error ?? 'Error al importar', 'error')
   }
 
   async function hacerBackup() {
@@ -78,8 +86,10 @@ export default function ConfiguracionPage() {
       <section className="config-section">
         <h2>Inventario</h2>
         <p className="config-hint" style={{ marginBottom: 12 }}>
-          Importar productos desde un archivo Excel (.xlsx). Esto reemplaza todos los
-          productos existentes y borra las ventas anteriores. El stock queda en 0.
+          Importar productos desde un archivo Excel (.xlsx). <strong>No borra nada</strong>:
+          compara por código de barras y sólo da de alta los productos que todavía no
+          existen. Los que ya están en el sistema se dejan tal cual (no se tocan precio
+          ni stock). Las ventas no se modifican.
         </p>
         <button className="btn-ghost" onClick={importarInventario} disabled={importando}>
           {importando ? 'Importando…' : 'Importar desde Excel'}

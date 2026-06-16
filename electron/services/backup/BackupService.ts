@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { join } from 'path'
-import { existsSync, mkdirSync, readdirSync, rmSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'fs'
 import type Database from 'better-sqlite3'
 import * as XLSX from 'xlsx'
 import { getDb } from '../../db/client'
@@ -55,7 +55,12 @@ export function stopBackupScheduler(): void {
 export function runDailyBackupIfNeeded(): void {
   try {
     const hoy = fechaLocal()
-    const yaHecho = existsSync(join(getBackupDir(), hoy, `gabriela_${hoy}.db`))
+    const carpetaHoy = join(getBackupDir(), hoy)
+    // Sólo lo damos por hecho si están AMBOS archivos. Si el .db existe pero el
+    // Excel falló, hay que reintentar para completar el backup del día.
+    const yaHecho =
+      existsSync(join(carpetaHoy, `gabriela_${hoy}.db`)) &&
+      existsSync(join(carpetaHoy, `almacen_${hoy}.xlsx`))
     if (yaHecho) return
 
     ejecutarBackup().then((r) => {
@@ -179,7 +184,11 @@ function construirExcel(db: Database.Database, destino: string): void {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen),       'Resumen')
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ventas),       'Ventas')
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(inventario),   'Inventario')
-  XLSX.writeFile(wb, destino)
+  // Generamos el .xlsx en memoria y lo escribimos con el fs de Node. NO usar
+  // XLSX.writeFile: depende del fs interno de SheetJS, que falla con la app
+  // empaquetada (asar) y tira "cannot save file".
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+  writeFileSync(destino, buf)
 }
 
 function limpiarAntiguos(): void {

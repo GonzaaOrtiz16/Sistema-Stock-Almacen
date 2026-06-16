@@ -1261,3 +1261,36 @@ kbd {
 .stock-reciente-item   { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .stock-reciente-nombre { flex: 1; min-width: 0; font-size: 0.9rem; color: var(--color-text); overflow-wrap: anywhere; word-break: break-word; }
 .stock-reciente-cant   { font-size: 0.9rem; font-weight: 700; color: var(--color-success); flex-shrink: 0; }
+
+/* ─── Aviso de actualización (auto-updater) ─────────────────────────────── */
+.update-banner {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 24px);
+  padding: 10px 16px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.update-banner.listo { border-left-color: var(--color-success); }
+.update-banner-text  { font-size: 0.9rem; color: var(--color-text); }
+.update-banner-btn {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-success);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.update-banner-btn:hover { filter: brightness(1.08); }

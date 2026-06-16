@@ -19,8 +19,23 @@ export function getDb(): Database.Database {
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   db.pragma('busy_timeout = 5000')
-  db.pragma('synchronous = NORMAL')
+  // FULL (no NORMAL): en un POS la durabilidad importa más que la velocidad.
+  // Con NORMAL en modo WAL, las transacciones confirmadas pueden perderse ante
+  // un corte de luz o apagado forzado de la PC. Con FULL cada commit se fsync-ea
+  // al WAL antes de devolver, así un producto recién guardado nunca se pierde.
+  db.pragma('synchronous = FULL')
+  // Volcar el WAL a la base principal cada ~200 páginas (~800 KB) para que el
+  // archivo .db no quede meses desactualizado y el WAL no crezca sin control.
+  db.pragma('wal_autocheckpoint = 200')
   db.pragma('cache_size = -20000') // 20 MB cache
+
+  // Función SQL para búsquedas tolerantes a acentos y mayúsculas:
+  // "limon" encuentra "Limón", "MILANESA" encuentra "milanesa", etc.
+  db.function('unaccent', { deterministic: true }, (s: unknown) =>
+    s == null
+      ? ''
+      : String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(),
+  )
 
   applyMigrations(db)
 
@@ -28,8 +43,20 @@ export function getDb(): Database.Database {
   return db
 }
 
+// Vuelca el WAL a la base principal. Lo llamamos periódicamente y antes de
+// salir para que `gabriela.db` esté siempre al día y nada quede sólo en el WAL.
+export function checkpointDb(): void {
+  if (!db) return
+  try {
+    db.pragma('wal_checkpoint(TRUNCATE)')
+  } catch (err) {
+    log.warn(`[DB] Checkpoint falló: ${(err as Error).message}`)
+  }
+}
+
 export function closeDb(): void {
   if (db) {
+    checkpointDb()
     db.close()
     db = null
     log.info('[DB] Conexión cerrada')

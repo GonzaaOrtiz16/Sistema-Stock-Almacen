@@ -10,6 +10,7 @@ import AgregarStockPage from './modules/inventario/AgregarStockPage'
 import ReportesPage from './modules/reportes/ReportesPage'
 import UsuariosPage from './modules/usuarios/UsuariosPage'
 import ConfiguracionPage from './modules/config/ConfiguracionPage'
+import UpdateBanner from './components/UpdateBanner'
 
 // ─── Layout de administrador ─────────────────────────────────────────────────
 
@@ -76,27 +77,37 @@ export default function App() {
     return () => api.removeListeners()
   }, [setInfo])
 
-  // Guard: sin usuario → pantalla de login
-  if (!usuario) return <LoginPin />
+  function renderContent() {
+    // Guard: sin usuario → pantalla de login
+    if (!usuario) return <LoginPin />
 
-  // Guard: hay un turno abierto previo sin cerrar → dejar elegir qué hacer
-  if (turnoActivo && turnoPendiente) return <TurnoExistente />
+    // Guard: hay un turno abierto previo sin cerrar → dejar elegir qué hacer
+    if (turnoActivo && turnoPendiente) return <TurnoExistente />
 
-  // Guard: usuario sin turno abierto → apertura de caja
-  if (!turnoActivo) return <AperturaCaja />
+    // Guard: usuario sin turno abierto → apertura de caja
+    if (!turnoActivo) return <AperturaCaja />
 
-  // Cajero: solo checkout (sin navegación lateral)
-  if (usuario.rol === 'cajero') return <CheckoutPage />
+    // Cajero: solo checkout (sin navegación lateral)
+    if (usuario.rol === 'cajero') return <CheckoutPage />
 
-  // Admin / supervisor: panel completo con barra lateral
+    // Admin / supervisor: panel completo con barra lateral
+    return (
+      <AdminLayout>
+        {adminPage === 'checkout'   && <CheckoutPage />}
+        {adminPage === 'inventario' && <ProductosPage />}
+        {adminPage === 'stock'      && <AgregarStockPage />}
+        {adminPage === 'reportes'   && <ReportesPage />}
+        {adminPage === 'usuarios'   && <UsuariosPage />}
+        {adminPage === 'config'     && <ConfiguracionPage />}
+      </AdminLayout>
+    )
+  }
+
+  // El aviso de actualización se monta siempre, por encima de cualquier pantalla.
   return (
-    <AdminLayout>
-      {adminPage === 'checkout'   && <CheckoutPage />}
-      {adminPage === 'inventario' && <ProductosPage />}
-      {adminPage === 'stock'      && <AgregarStockPage />}
-      {adminPage === 'reportes'   && <ReportesPage />}
-      {adminPage === 'usuarios'   && <UsuariosPage />}
-      {adminPage === 'config'     && <ConfiguracionPage />}
-    </AdminLayout>
+    <>
+      <UpdateBanner />
+      {renderContent()}
+    </>
   )
 }

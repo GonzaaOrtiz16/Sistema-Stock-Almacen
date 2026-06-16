@@ -1,6 +1,6 @@
 {
   "name": "almacen-gabriela",
-  "version": "1.0.3",
+  "version": "1.0.7",
   "private": true,
   "description": "Sistema POS - Almacén Minimercado Gabriela",
   "author": "Almacén Minimercado Gabriela",
@@ -20,6 +20,7 @@
     "electron-updater": "^6.3.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "ws": "^8.21.0",
     "xlsx": "^0.18.5",
     "zustand": "^5.0.1"
   },
@@ -30,6 +31,7 @@
     "@types/node": "^22.7.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.3.2",
     "electron": "^32.1.2",
     "electron-builder": "^25.0.0",

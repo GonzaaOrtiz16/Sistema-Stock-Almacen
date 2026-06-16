@@ -80,6 +80,61 @@ export function registerProductosHandlers(): void {
           stock:   (r[3] && Number(r[3]) > 0) ? Number(r[3]) : 0,
         }))
 
+      // Seguridad: nunca borramos el inventario actual si el archivo no trae
+      // productos válidos (Excel vacío, mal formato o columnas equivocadas).
+      // Sin esta guarda, un archivo erróneo dejaría el almacén sin productos.
+      if (productos.length === 0) {
+        log.warn(`[IPC] importar-excel: archivo sin productos válidos, importación abortada (${filePath})`)
+        return { ok: false, error: 'El archivo no contiene productos válidos. No se borró nada.' }
+      }
+
+      // Merge NO destructivo: no se borra nada. Comparamos por código de barras
+      // (y por nombre cuando la fila no tiene código). Si el producto ya existe,
+      // se deja tal cual está en el sistema. Sólo se dan de alta los que faltan.
+      const existeBarcode = db.prepare('SELECT 1 FROM productos WHERE codigo_barras = ?')
+      const existeNombre  = db.prepare(
+        'SELECT 1 FROM productos WHERE activo = 1 AND lower(nombre) = lower(?)',
+      )
+      const normNombre = (s: string) =>
+        s.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase()
+
+      // Clave de identidad: el código si hay, si no el nombre normalizado. Sirve
+      // para no insertar dos veces algo repetido dentro del mismo Excel.
+      const vistos = new Set<string>()
+      const nuevos: typeof productos = []
+      for (const p of productos) {
+        const clave = p.barcode ? `b:${p.barcode}` : `n:${normNombre(p.nombre)}`
+        if (vistos.has(clave)) continue
+        vistos.add(clave)
+
+        const yaExiste = p.barcode
+          ? existeBarcode.get(p.barcode)
+          : existeNombre.get(p.nombre)
+        if (!yaExiste) nuevos.push(p)
+      }
+
+      const existentes = productos.length - nuevos.length
+
+      if (nuevos.length === 0) {
+        log.info(`[IPC] importar-excel: 0 nuevos (${existentes} ya existían) desde ${filePath}`)
+        return { ok: true, importados: 0, existentes }
+      }
+
+      // Confirmación: acción segura (sólo agrega), pero confirmamos igual para
+      // que quede claro qué va a pasar.
+      const confirm = await dialog.showMessageBox(win!, {
+        type: 'question',
+        buttons: ['Cancelar', `Agregar ${nuevos.length} nuevos`],
+        defaultId: 1,
+        cancelId: 0,
+        title: 'Importar desde Excel',
+        message: `Se agregarán ${nuevos.length} productos nuevos.`,
+        detail: `Los ${existentes} que ya existen no se modifican. No se borra nada (ni productos ni ventas). ¿Continuar?`,
+      })
+      if (confirm.response !== 1) {
+        return { ok: false, error: 'Cancelado' }
+      }
+
       const insert = db.prepare(`
         INSERT INTO productos
           (codigo_barras, nombre, precio_venta, precio_costo, stock_actual, stock_minimo, unidad, categoria_id)
@@ -89,25 +144,20 @@ export function registerProductosHandlers(): void {
 
       let importados = 0
       db.transaction(() => {
-        db.prepare('DELETE FROM anulaciones').run()
-        db.prepare('DELETE FROM detalle_ventas').run()
-        db.prepare('DELETE FROM ventas').run()
-        db.prepare('DELETE FROM turnos_caja').run()
-        db.prepare('DELETE FROM productos').run()
-        db.prepare('DELETE FROM categorias').run()
-
-        for (const p of productos) {
+        for (const p of nuevos) {
           try {
             insert.run({ barcode: p.barcode, nombre: p.nombre, precio: p.precio, stock: p.stock })
           } catch {
+            // Choque de código único u otro problema puntual: lo damos de alta
+            // sin código antes que perder el producto.
             insert.run({ barcode: null, nombre: p.nombre, precio: p.precio, stock: p.stock })
           }
           importados++
         }
       })()
 
-      log.info(`[IPC] importar-excel: ${importados} productos importados desde ${filePath}`)
-      return { ok: true, importados }
+      log.info(`[IPC] importar-excel: ${importados} nuevos agregados, ${existentes} ya existían (${filePath})`)
+      return { ok: true, importados, existentes }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
       log.error(`[IPC] importar-excel error: ${msg}`)

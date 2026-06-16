@@ -9,7 +9,7 @@ import log from '../../utils/logger'
 // Los usuarios con la app instalada recibirán la notificación automáticamente.
 export function setupAutoUpdater(): void {
   autoUpdater.logger = log
-  autoUpdater.autoDownload = false        // el usuario decide cuándo descargar
+  autoUpdater.autoDownload = true         // descarga la actualización apenas la detecta
   autoUpdater.autoInstallOnAppQuit = true // instala al cerrar si ya se descargó
 
   autoUpdater.on('checking-for-update', () => {

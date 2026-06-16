@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
-import { getDb, closeDb } from './db/client'
+import { getDb, closeDb, checkpointDb } from './db/client'
 import { seedIfEmpty } from './db/seed'
 import { SyncEngine } from './services/sync/SyncEngine'
 import { setupAutoUpdater, installUpdate } from './services/updater/AutoUpdater'
@@ -18,6 +18,7 @@ import { IPC } from '../shared/constants'
 
 let mainWindow: BrowserWindow | null = null
 let syncEngine: SyncEngine | null = null
+let checkpointTimer: ReturnType<typeof setInterval> | null = null
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) { app.quit(); process.exit(0) }
@@ -92,6 +93,11 @@ app.whenReady().then(() => {
   // Backup diario automático de toda la data (ventas, stock y reportes)
   startBackupScheduler()
 
+  // Red de seguridad: volcamos el WAL a la base principal cada 30 s. Así, aunque
+  // la PC se apague de golpe o el proceso muera sin cerrar limpio, lo cargado
+  // queda en gabriela.db y no se pierde al reabrir.
+  checkpointTimer = setInterval(checkpointDb, 30_000)
+
   createWindow()
 
   // Auto-updater (solo en producción)
@@ -100,11 +106,18 @@ app.whenReady().then(() => {
   }
 })
 
-app.on('window-all-closed', () => {
+// `before-quit` cubre TODA salida (cerrar ventana, Alt+F4, apagado de Windows,
+// quit del updater), no sólo window-all-closed. Cerramos la base acá para
+// garantizar el checkpoint final en cualquier caso de cierre ordenado.
+app.on('before-quit', () => {
+  if (checkpointTimer) { clearInterval(checkpointTimer); checkpointTimer = null }
   syncEngine?.stop()
   stopBackupScheduler()
   closeDb()
   log.info('[Main] Cerrando aplicación')
+})
+
+app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 

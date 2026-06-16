@@ -21,7 +21,7 @@ declare global {
         actualizar:       (i: ProductoUpdateInput)      => Promise<Producto>
         actualizarMasivo: (i: ActualizacionMasiva)      => Promise<number>
         agregarStock:     (id: number, cantidad: number) => Promise<Producto>
-        importarExcel:    ()                             => Promise<{ ok: boolean; importados?: number; error?: string }>
+        importarExcel:    ()                             => Promise<{ ok: boolean; importados?: number; existentes?: number; error?: string }>
         pendientesListar:   ()           => Promise<PendienteCodigo[]>
         pendientesAgregar:  (c: string)  => Promise<PendienteCodigo[]>
         pendientesEliminar: (c: string)  => Promise<PendienteCodigo[]>

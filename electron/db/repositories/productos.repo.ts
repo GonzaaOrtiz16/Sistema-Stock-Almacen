@@ -14,9 +14,9 @@ export function createProductosRepo(db: Database.Database) {
   const stmtByBarcode = db.prepare(
     'SELECT * FROM productos WHERE codigo_barras = ? AND activo = 1',
   )
-  const stmtByName = db.prepare(
-    "SELECT * FROM productos WHERE nombre LIKE ? AND activo = 1 ORDER BY nombre COLLATE NOCASE LIMIT 30",
-  )
+  // Normaliza igual que la función SQL `unaccent`: sin acentos y en minúsculas.
+  const normalizar = (s: string): string =>
+    s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   const stmtAll = db.prepare(
     'SELECT * FROM productos WHERE activo = 1 ORDER BY nombre COLLATE NOCASE',
   )
@@ -83,8 +83,48 @@ export function createProductosRepo(db: Database.Database) {
       return (stmtByBarcode.get(barcode) as Producto | undefined) ?? null
     },
 
+    // Búsqueda inteligente para la caja:
+    //  · tolera acentos y mayúsculas (vía la función SQL `unaccent`)
+    //  · acepta varias palabras en cualquier orden ("coca grande" → "Coca Cola Grande")
+    //  · cada palabra puede coincidir con el nombre o con el código de barras
+    //  · ordena por relevancia: coincidencia exacta › empieza con › palabra › contiene,
+    //    y entre iguales prioriza los que tienen stock
     buscarPorNombre(nombre: string): Producto[] {
-      return stmtByName.all(`%${nombre}%`) as Producto[]
+      const full = normalizar(nombre.trim())
+      if (!full) return []
+
+      const tokens = full.split(/\s+/).filter(Boolean).slice(0, 6)
+      if (tokens.length === 0) return []
+
+      // Cada token debe aparecer en el nombre (sin acentos) o en el código.
+      const where = tokens
+        .map(() => '(unaccent(nombre) LIKE ? OR codigo_barras LIKE ?)')
+        .join(' AND ')
+
+      const tokenParams: string[] = []
+      for (const t of tokens) {
+        tokenParams.push(`%${t}%`, `%${t}%`)
+      }
+
+      const sql = `
+        SELECT *,
+          CASE
+            WHEN unaccent(nombre) = ?                  THEN 0
+            WHEN unaccent(nombre) LIKE ? || '%'        THEN 1
+            WHEN unaccent(nombre) LIKE '%' || ? || '%' AND unaccent(nombre) LIKE '% ' || ? || '%' THEN 2
+            ELSE 3
+          END AS _rank
+        FROM productos
+        WHERE activo = 1 AND (${where})
+        ORDER BY _rank ASC, (stock_actual <= 0) ASC, nombre COLLATE NOCASE
+        LIMIT 30
+      `
+
+      const rankParams = [full, full, full, full]
+      const rows = db.prepare(sql).all(...rankParams, ...tokenParams) as Array<
+        Producto & { _rank?: number }
+      >
+      return rows.map(({ _rank, ...p }) => p as Producto)
     },
 
     listar(): Producto[] {

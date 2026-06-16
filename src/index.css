@@ -1319,8 +1319,11 @@ kbd {
   color: #eaeaea;
   border-color: #facc15;
 }
+.version-badge.fallo { color: #eaeaea; border-color: #ef4444; }
 .version-badge.clickable { cursor: pointer; }
 .version-badge.clickable:hover { background: rgba(40, 40, 60, 0.95); }
+
+.version-badge-bang.fallo { background: #ef4444; color: #fff; }
 
 .version-badge-update {
   display: flex;

@@ -54,6 +54,7 @@ export const IPC = {
   UPDATER_AVAILABLE:          'updater:available',
   UPDATER_PROGRESS:           'updater:progress',
   UPDATER_DOWNLOADED:         'updater:downloaded',
+  UPDATER_ERROR:              'updater:error',
   UPDATER_INSTALL:            'updater:install',
 
   // App / versión

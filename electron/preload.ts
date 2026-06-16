@@ -108,10 +108,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updater: {
     onAvailable:  (cb: (info: { version: string }) => void) => { ipcRenderer.on(IPC.UPDATER_AVAILABLE,  (_e, i) => cb(i)) },
     onDescargado: (cb: (info: { version: string }) => void) => { ipcRenderer.on(IPC.UPDATER_DOWNLOADED, (_e, i) => cb(i)) },
+    onError:      (cb: (info: { message: string }) => void) => { ipcRenderer.on(IPC.UPDATER_ERROR,      (_e, i) => cb(i)) },
     instalar:     () => ipcRenderer.send(IPC.UPDATER_INSTALL),
     removeListeners: () => {
       ipcRenderer.removeAllListeners(IPC.UPDATER_AVAILABLE)
       ipcRenderer.removeAllListeners(IPC.UPDATER_DOWNLOADED)
+      ipcRenderer.removeAllListeners(IPC.UPDATER_ERROR)
     },
   },
 })

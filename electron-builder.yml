@@ -22,7 +22,9 @@ win:
       arch:
         - x64
   # icon: build/icon.ico    # descommentar cuando tengas el .ico (256×256)
-  publisherName: Almacén Minimercado Gabriela
+  # OJO: NO setear publisherName mientras la app no esté firmada digitalmente.
+  # Si se setea, electron-updater verifica la firma del instalador descargado y,
+  # al no estar firmado, RECHAZA la actualización (se queda "descargando" sin fin).
 
 nsis:
   oneClick: false

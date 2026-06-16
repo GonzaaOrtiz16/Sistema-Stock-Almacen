@@ -65,7 +65,7 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
 export default function App() {
   const { usuario, turnoActivo, turnoPendiente, adminPage } = useCajaStore()
   const { setInfo } = useSyncStore()
-  const { setVersion, setDescargando, setListo } = useUpdateStore()
+  const { setVersion, setDescargando, setListo, setError } = useUpdateStore()
 
   // Suscribir a eventos de sync desde el proceso main
   useEffect(() => {
@@ -86,8 +86,9 @@ export default function App() {
     const api = window.electronAPI.updater
     api.onAvailable((i) => setDescargando(i.version))
     api.onDescargado((i) => setListo(i.version))
+    api.onError((i) => setError(i.message))
     return () => api.removeListeners()
-  }, [setVersion, setDescargando, setListo])
+  }, [setVersion, setDescargando, setListo, setError])
 
   function renderContent() {
     // Guard: sin usuario → pantalla de login

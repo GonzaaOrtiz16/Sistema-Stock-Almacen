@@ -12,6 +12,15 @@ export function setupAutoUpdater(): void {
   autoUpdater.autoDownload = true         // descarga la actualización apenas la detecta
   autoUpdater.autoInstallOnAppQuit = true // instala al cerrar si ya se descargó
 
+  // La app NO está firmada digitalmente. En Windows, electron-updater verifica
+  // la firma del instalador descargado y, al fallar, descarta la actualización
+  // (quedaba "descargando" para siempre). Como no hay firma que verificar,
+  // sobreescribimos la verificación para que no bloquee. Reactivar SOLO si en el
+  // futuro se firma el instalador con un certificado real.
+  ;(autoUpdater as unknown as {
+    verifyUpdateCodeSignature: () => Promise<string | null>
+  }).verifyUpdateCodeSignature = () => Promise.resolve(null)
+
   autoUpdater.on('checking-for-update', () => {
     log.info('[AutoUpdater] Buscando actualizaciones…')
   })
@@ -37,6 +46,8 @@ export function setupAutoUpdater(): void {
 
   autoUpdater.on('error', (err) => {
     log.error('[AutoUpdater] Error:', err.message)
+    // Avisamos al renderer para que no quede mostrando "descargando" sin fin.
+    notify('updater:error', { message: err.message })
   })
 
   autoUpdater.checkForUpdates().catch((err) => {

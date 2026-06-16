@@ -86,6 +86,7 @@ declare global {
       updater: {
         onAvailable:     (cb: (info: { version: string }) => void) => void
         onDescargado:    (cb: (info: { version: string }) => void) => void
+        onError:         (cb: (info: { message: string }) => void) => void
         instalar:        ()                                        => void
         removeListeners: ()                                        => void
       }

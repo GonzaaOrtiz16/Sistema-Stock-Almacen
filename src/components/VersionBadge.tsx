@@ -8,19 +8,23 @@ export default function VersionBadge() {
   const version = useUpdateStore((s) => s.version)
   const fase = useUpdateStore((s) => s.fase)
   const nuevaVersion = useUpdateStore((s) => s.nuevaVersion)
+  const error = useUpdateStore((s) => s.error)
 
-  const hayUpdate = fase !== 'idle'
+  const hayUpdate = fase === 'descargando' || fase === 'listo'
   const listo = fase === 'listo'
+  const fallo = fase === 'error'
 
   const titulo = listo
     ? `Actualización ${nuevaVersion} lista — clic para reiniciar e instalar`
-    : hayUpdate
+    : fase === 'descargando'
       ? `Descargando actualización ${nuevaVersion}…`
-      : `Versión ${version || '—'}`
+      : fallo
+        ? `No se pudo actualizar: ${error ?? 'error desconocido'}`
+        : `Versión ${version || '—'}`
 
   return (
     <div
-      className={`version-badge${hayUpdate ? ' tiene-update' : ''}${listo ? ' clickable' : ''}`}
+      className={`version-badge${hayUpdate ? ' tiene-update' : ''}${fallo ? ' fallo' : ''}${listo ? ' clickable' : ''}`}
       title={titulo}
       onClick={listo ? () => window.electronAPI.updater.instalar() : undefined}
     >
@@ -48,6 +52,10 @@ export default function VersionBadge() {
           {/* Signo de admiración amarillo */}
           <span className="version-badge-bang" aria-label="Actualización pendiente">!</span>
         </span>
+      )}
+
+      {fallo && (
+        <span className="version-badge-bang fallo" aria-label="Error al actualizar">!</span>
       )}
     </div>
   )

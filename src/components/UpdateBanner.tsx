@@ -7,7 +7,7 @@ export default function UpdateBanner() {
   const fase = useUpdateStore((s) => s.fase)
   const nuevaVersion = useUpdateStore((s) => s.nuevaVersion)
 
-  if (fase === 'idle') return null
+  if (fase !== 'descargando' && fase !== 'listo') return null
 
   return (
     <div className={`update-banner${fase === 'listo' ? ' listo' : ''}`}>

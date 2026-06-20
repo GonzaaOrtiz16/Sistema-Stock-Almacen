@@ -12,6 +12,11 @@ export const IPC = {
   PRODUCTOS_PENDIENTES_AGREGAR:  'productos:pendientes-agregar',
   PRODUCTOS_PENDIENTES_ELIMINAR: 'productos:pendientes-eliminar',
 
+  // Gestor remoto (encola órdenes para la Caja)
+  GESTOR_CREAR:        'gestor:crear',
+  GESTOR_SUMAR_STOCK:  'gestor:sumar-stock',
+  GESTOR_ACTUALIZAR:   'gestor:actualizar',
+
   // Promociones
   PROMOCIONES_LISTAR:         'promociones:listar',
   PROMOCIONES_LISTAR_ACTIVAS: 'promociones:listar-activas',

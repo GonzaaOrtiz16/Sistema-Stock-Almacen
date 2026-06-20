@@ -77,6 +77,7 @@ function applyMigrations(database: Database.Database): void {
     { name: '002_pendientes_codigo', sql: MIGRATION_002 },
     { name: '003_productos_uuid', sql: MIGRATION_003 },
     { name: '004_promociones', sql: MIGRATION_004 },
+    { name: '005_sync_ops', sql: MIGRATION_005 },
   ]
 
   const runMigration = database.transaction((name: string, sql: string) => {
@@ -247,6 +248,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_productos_uuid ON productos(uuid);
 // ítems (producto + cantidad). Si tiene un solo ítem es una promo de "varias
 // unidades del mismo producto"; si tiene varios, es un combo (ej: 2 cocas + 1
 // fernet a $X). En caja se aplica tantas veces como entre en el carrito.
+// Sincronización de órdenes entre Caja y Gestor (Etapas 4-5).
+//  · sync_ops_log    (CAJA):   ids de órdenes ya ejecutadas → idempotencia, aunque
+//                              falle el marcado en Supabase no se reaplican.
+//  · sync_ops_outbox (GESTOR): bandeja de salida local de órdenes a enviar a
+//                              Supabase; sobrevive a estar sin internet.
+const MIGRATION_005 = `
+CREATE TABLE IF NOT EXISTS sync_ops_log (
+  op_id       TEXT PRIMARY KEY,
+  applied_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE TABLE IF NOT EXISTS sync_ops_outbox (
+  id            TEXT PRIMARY KEY,
+  tipo          TEXT NOT NULL CHECK(tipo IN ('crear','sumar_stock','actualizar')),
+  producto_uuid TEXT,
+  payload       TEXT NOT NULL DEFAULT '{}',
+  estado        TEXT NOT NULL DEFAULT 'pendiente'
+                CHECK(estado IN ('pendiente','enviada')),
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_outbox_pendientes
+  ON sync_ops_outbox(created_at) WHERE estado = 'pendiente';
+`;
+
 const MIGRATION_004 = `
 CREATE TABLE IF NOT EXISTS promociones (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,

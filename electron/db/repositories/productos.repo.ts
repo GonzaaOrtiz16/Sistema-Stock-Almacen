@@ -21,12 +21,38 @@ export function createProductosRepo(db: Database.Database) {
     'SELECT * FROM productos WHERE activo = 1 ORDER BY nombre COLLATE NOCASE',
   )
   const stmtById = db.prepare('SELECT * FROM productos WHERE id = ?')
+  const stmtByUuid = db.prepare('SELECT * FROM productos WHERE uuid = ?')
 
   const stmtInsert = db.prepare(`
     INSERT INTO productos
       (uuid, codigo_barras, nombre, precio_venta, precio_costo, stock_actual, stock_minimo, unidad, categoria_id)
     VALUES
       (lower(hex(randomblob(16))), @codigo_barras, @nombre, @precio_venta, @precio_costo, @stock_actual, @stock_minimo, @unidad, @categoria_id)
+  `)
+
+  // Insert con uuid provisto (lo usa la Caja al ejecutar una orden 'crear' del
+  // Gestor: ambos comparten el uuid → idempotente y consistente en el catálogo).
+  const stmtInsertConUuid = db.prepare(`
+    INSERT INTO productos
+      (uuid, codigo_barras, nombre, precio_venta, precio_costo, stock_actual, stock_minimo, unidad, categoria_id)
+    VALUES
+      (@uuid, @codigo_barras, @nombre, @precio_venta, @precio_costo, @stock_actual, @stock_minimo, @unidad, @categoria_id)
+  `)
+
+  const stmtIncrStockUuid = db.prepare(`
+    UPDATE productos SET stock_actual = stock_actual + @cantidad,
+      updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), sync_status = 'pending'
+    WHERE uuid = @uuid
+  `)
+
+  // Actualiza SOLO nombre y precio (lo que el Gestor puede modificar de existentes).
+  const stmtUpdateCamposUuid = db.prepare(`
+    UPDATE productos SET
+      nombre       = @nombre,
+      precio_venta = @precio_venta,
+      updated_at   = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+      sync_status  = 'pending'
+    WHERE uuid = @uuid
   `)
 
   const stmtUpdate = db.prepare(`
@@ -71,6 +97,26 @@ export function createProductosRepo(db: Database.Database) {
   const stmtIncrStock = db.prepare(
     'UPDATE productos SET stock_actual = stock_actual + @cantidad, updated_at = strftime(\'%Y-%m-%dT%H:%M:%fZ\',\'now\'), sync_status = \'pending\' WHERE id = @id',
   )
+
+  // Refleja una fila del catálogo (Supabase) en la base local del Gestor. Upsert
+  // por uuid; queda 'synced' (el Gestor nunca publica el catálogo, solo lo lee).
+  const stmtUpsertCatalogo = db.prepare(`
+    INSERT INTO productos
+      (uuid, codigo_barras, nombre, precio_venta, precio_costo, stock_actual, stock_minimo, unidad, activo, updated_at, sync_status)
+    VALUES
+      (@uuid, @codigo_barras, @nombre, @precio_venta, @precio_costo, @stock_actual, @stock_minimo, @unidad, @activo, @updated_at, 'synced')
+    ON CONFLICT(uuid) DO UPDATE SET
+      codigo_barras = excluded.codigo_barras,
+      nombre        = excluded.nombre,
+      precio_venta  = excluded.precio_venta,
+      precio_costo  = excluded.precio_costo,
+      stock_actual  = excluded.stock_actual,
+      stock_minimo  = excluded.stock_minimo,
+      unidad        = excluded.unidad,
+      activo        = excluded.activo,
+      updated_at    = excluded.updated_at,
+      sync_status   = 'synced'
+  `)
 
   // Códigos pendientes (escaneados en caja sin producto asociado)
   const stmtPendListar = db.prepare(
@@ -186,6 +232,59 @@ export function createProductosRepo(db: Database.Database) {
     agregarStock(id: number, cantidad: number): Producto {
       stmtIncrStock.run({ id, cantidad })
       return stmtById.get(id) as Producto
+    },
+
+    // ── Helpers por uuid (sincronización Caja ↔ Gestor) ──────────────────────
+    buscarPorUuid(uuid: string): Producto | null {
+      return (stmtByUuid.get(uuid) as Producto | undefined) ?? null
+    },
+
+    crearConUuid(uuid: string, input: ProductoCreateInput): Producto {
+      stmtInsertConUuid.run({
+        uuid,
+        codigo_barras: input.codigo_barras ?? null,
+        nombre:        input.nombre,
+        precio_venta:  input.precio_venta,
+        precio_costo:  input.precio_costo ?? null,
+        stock_actual:  input.stock_actual ?? 0,
+        stock_minimo:  input.stock_minimo ?? 0,
+        unidad:        input.unidad ?? 'unidad',
+        categoria_id:  input.categoria_id ?? null,
+      })
+      return stmtByUuid.get(uuid) as Producto
+    },
+
+    agregarStockPorUuid(uuid: string, cantidad: number): Producto | null {
+      stmtIncrStockUuid.run({ uuid, cantidad })
+      return (stmtByUuid.get(uuid) as Producto | undefined) ?? null
+    },
+
+    // Modifica solo nombre/precio de un producto existente (lo permitido al Gestor).
+    actualizarCamposPorUuid(uuid: string, campos: { nombre?: string; precio_venta?: number }): Producto | null {
+      const current = stmtByUuid.get(uuid) as Producto | undefined
+      if (!current) return null
+      stmtUpdateCamposUuid.run({
+        uuid,
+        nombre:       campos.nombre       ?? current.nombre,
+        precio_venta: campos.precio_venta ?? current.precio_venta,
+      })
+      return stmtByUuid.get(uuid) as Producto
+    },
+
+    // Refleja una fila del catálogo remoto en la base local (Gestor).
+    upsertCatalogo(row: {
+      uuid: string
+      codigo_barras: string | null
+      nombre: string
+      precio_venta: number
+      precio_costo: number | null
+      stock_actual: number
+      stock_minimo: number
+      unidad: string
+      activo: number
+      updated_at: string
+    }): void {
+      stmtUpsertCatalogo.run(row)
     },
 
     pendientesListar(): PendienteCodigo[] {

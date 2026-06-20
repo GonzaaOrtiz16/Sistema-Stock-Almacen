@@ -6,6 +6,9 @@ import { getDb } from '../../db/client'
 import { createConfigRepo } from '../../db/repositories/config.repo'
 import { getSupabase } from '../supabase'
 import { CatalogPushWorker } from './CatalogPushWorker'
+import { OpsExecutor } from './OpsExecutor'
+import { CatalogPullWorker } from './CatalogPullWorker'
+import { OpsPushWorker } from './OpsPushWorker'
 import log from '../../utils/logger'
 
 // Orquesta la sincronización de productos por Supabase. Según el rol:
@@ -18,6 +21,9 @@ export class SyncEngine {
   private running = false
   private role: AppRole = 'caja'
   private catalogPush: CatalogPushWorker | null = null
+  private opsExecutor: OpsExecutor | null = null
+  private catalogPull: CatalogPullWorker | null = null
+  private opsPush: OpsPushWorker | null = null
 
   start(): void {
     const sb = getSupabase()
@@ -28,6 +34,9 @@ export class SyncEngine {
 
     this.role = createConfigRepo(getDb()).getRole()
     this.catalogPush = new CatalogPushWorker(sb)
+    this.opsExecutor = new OpsExecutor(sb)
+    this.catalogPull = new CatalogPullWorker(sb)
+    this.opsPush = new OpsPushWorker(sb)
     log.info(`[SyncEngine] Iniciando (rol=${this.role}, intervalo ${SYNC_INTERVAL_MS}ms)`)
 
     void this.tick()
@@ -60,9 +69,32 @@ export class SyncEngine {
         do {
           subidos = await this.catalogPush.push()
         } while (subidos >= SYNC_BATCH_SIZE)
-        // Etapa 5: await this.opsExecutor.run()
+
+        // Ejecuta las órdenes que dejó el Gestor (crear / sumar stock / modificar).
+        if (this.opsExecutor) {
+          let aplicadas: number
+          do {
+            aplicadas = await this.opsExecutor.run()
+          } while (aplicadas >= SYNC_BATCH_SIZE)
+        }
       }
-      // Etapas 3/4 (gestor): bajar catálogo + empujar órdenes.
+
+      if (this.role === 'gestor') {
+        // Baja el catálogo publicado por la Caja (por lotes).
+        if (this.catalogPull) {
+          let bajados: number
+          do {
+            bajados = await this.catalogPull.pull()
+          } while (bajados >= SYNC_BATCH_SIZE)
+        }
+        // Etapa 4: empujar el outbox de órdenes a Supabase.
+        if (this.opsPush) {
+          let enviadas: number
+          do {
+            enviadas = await this.opsPush.push()
+          } while (enviadas >= SYNC_BATCH_SIZE)
+        }
+      }
 
       this.setOnline()
     } catch (err) {

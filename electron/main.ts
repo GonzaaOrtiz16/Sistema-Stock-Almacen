@@ -9,6 +9,7 @@ import { setupAutoUpdater, installUpdate } from './services/updater/AutoUpdater'
 import log from './utils/logger'
 import { registerProductosHandlers } from './ipc/productos.ipc'
 import { registerPromocionesHandlers } from './ipc/promociones.ipc'
+import { registerGestorHandlers } from './ipc/gestor.ipc'
 import { registerVentasHandlers } from './ipc/ventas.ipc'
 import { registerCajaHandlers } from './ipc/caja.ipc'
 import { registerUsuariosHandlers } from './ipc/usuarios.ipc'
@@ -71,6 +72,7 @@ function createWindow(): void {
 function registerIpcHandlers(): void {
   registerProductosHandlers()
   registerPromocionesHandlers()
+  registerGestorHandlers()
   registerVentasHandlers()
   registerCajaHandlers()
   registerUsuariosHandlers()

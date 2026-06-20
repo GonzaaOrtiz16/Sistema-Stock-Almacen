@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/constants'
 import type {
   Producto, ProductoCreateInput, ProductoUpdateInput, ActualizacionMasiva, PendienteCodigo,
+  GestorCrearInput, GestorSumarStockInput, GestorActualizarInput,
 } from '../shared/types/producto.types'
 import type {
   Promocion, PromocionCreateInput, PromocionUpdateInput,
@@ -29,6 +30,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     pendientesListar:   ()             => ipcRenderer.invoke(IPC.PRODUCTOS_PENDIENTES_LISTAR)          as Promise<PendienteCodigo[]>,
     pendientesAgregar:  (c: string)    => ipcRenderer.invoke(IPC.PRODUCTOS_PENDIENTES_AGREGAR,  c)    as Promise<PendienteCodigo[]>,
     pendientesEliminar: (c: string)    => ipcRenderer.invoke(IPC.PRODUCTOS_PENDIENTES_ELIMINAR, c)    as Promise<PendienteCodigo[]>,
+  },
+
+  gestor: {
+    crear:       (i: GestorCrearInput)      => ipcRenderer.invoke(IPC.GESTOR_CREAR,       i) as Promise<Producto>,
+    sumarStock:  (i: GestorSumarStockInput) => ipcRenderer.invoke(IPC.GESTOR_SUMAR_STOCK, i) as Promise<Producto>,
+    actualizar:  (i: GestorActualizarInput) => ipcRenderer.invoke(IPC.GESTOR_ACTUALIZAR,  i) as Promise<Producto>,
   },
 
   promociones: {

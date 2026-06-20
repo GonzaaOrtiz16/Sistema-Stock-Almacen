@@ -48,6 +48,25 @@ export interface PendienteCodigo {
   created_at: string
 }
 
+// ── Acciones del Gestor remoto (encolan una orden para la Caja) ──────────────
+export interface GestorCrearInput {
+  nombre: string
+  precio_venta: number
+  stock_actual?: number
+  codigo_barras?: string | null
+}
+
+export interface GestorSumarStockInput {
+  uuid: string
+  cantidad: number       // siempre suma (+N)
+}
+
+export interface GestorActualizarInput {
+  uuid: string
+  nombre?: string
+  precio_venta?: number
+}
+
 export interface ActualizacionMasiva {
   tipo: 'porcentaje_global' | 'porcentaje_categoria'
   porcentaje: number          // positivo = aumento, negativo = reducción

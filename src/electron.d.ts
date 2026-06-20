@@ -1,5 +1,6 @@
 import type {
   Producto, ProductoCreateInput, ProductoUpdateInput, ActualizacionMasiva, PendienteCodigo,
+  GestorCrearInput, GestorSumarStockInput, GestorActualizarInput,
 } from '../shared/types/producto.types'
 import type {
   Promocion, PromocionCreateInput, PromocionUpdateInput,
@@ -29,6 +30,11 @@ declare global {
         pendientesListar:   ()           => Promise<PendienteCodigo[]>
         pendientesAgregar:  (c: string)  => Promise<PendienteCodigo[]>
         pendientesEliminar: (c: string)  => Promise<PendienteCodigo[]>
+      }
+      gestor: {
+        crear:      (i: GestorCrearInput)      => Promise<Producto>
+        sumarStock: (i: GestorSumarStockInput) => Promise<Producto>
+        actualizar: (i: GestorActualizarInput) => Promise<Producto>
       }
       promociones: {
         listar:        ()                            => Promise<Promocion[]>

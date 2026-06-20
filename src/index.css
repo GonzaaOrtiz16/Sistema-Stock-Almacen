@@ -1494,3 +1494,52 @@ kbd {
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(2px); }
 }
+
+/* ── Gestor remoto (app por rol) ─────────────────────────────────────────────
+   Acento cian/teal para diferenciarla visualmente de la Caja.                  */
+.gestor-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: #0f0f1a;
+}
+.gestor-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 20px;
+  background: #0c1622;
+  border-bottom: 1px solid #14304a;
+}
+.gestor-title { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.gestor-badge {
+  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em;
+  color: #22d3ee; background: rgba(34,211,238,.12);
+  border: 1px solid rgba(34,211,238,.3); border-radius: 999px;
+  padding: 2px 10px; width: fit-content;
+}
+.gestor-sub { font-size: 0.85rem; color: #8aa0b5; }
+.gestor-aviso {
+  font-size: 0.82rem; color: #8aa0b5; line-height: 1.5;
+  padding: 10px 20px; background: #0c1622; border-bottom: 1px solid #14304a;
+}
+.gestor-aviso b { color: #67e8f9; font-weight: 600; }
+.gestor-search { padding: 12px 20px 8px; }
+.gestor-search .search-input { max-width: 460px; }
+.gestor-search .search-input:focus { border-color: #22d3ee; }
+.gestor-table-wrap { flex: 1 1 0; min-height: 0; padding: 0 8px 24px; }
+.gestor-row-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.gestor-row-actions .btn-ghost { padding: 4px 10px; font-size: 0.8rem; }
+
+.gestor-stock-prod {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  padding: 10px 12px; background: #12121f; border: 1px solid #1e1e30; border-radius: 8px;
+}
+.gestor-stock-nombre { font-weight: 600; }
+.gestor-stock-precio { color: #4f8ef7; font-weight: 600; }
+.gestor-stock-resumen {
+  display: flex; justify-content: space-between; font-size: 0.85rem; color: #9aa7b5;
+  padding: 4px 2px;
+}
+.gestor-stock-resumen b { color: #eaeaea; }

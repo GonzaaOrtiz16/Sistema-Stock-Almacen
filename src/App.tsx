@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import type { AppRole } from '../shared/types/app.types'
 import { useCajaStore, type AdminPage } from './store/cajaStore'
 import { useSyncStore } from './store/syncStore'
 import { useUpdateStore } from './store/updateStore'
@@ -12,6 +13,7 @@ import PromocionesPage from './modules/promociones/PromocionesPage'
 import ReportesPage from './modules/reportes/ReportesPage'
 import UsuariosPage from './modules/usuarios/UsuariosPage'
 import ConfiguracionPage from './modules/config/ConfiguracionPage'
+import GestorApp from './modules/gestor/GestorApp'
 import UpdateBanner from './components/UpdateBanner'
 import VersionBadge from './components/VersionBadge'
 
@@ -68,6 +70,12 @@ export default function App() {
   const { usuario, turnoActivo, turnoPendiente, adminPage } = useCajaStore()
   const { setInfo } = useSyncStore()
   const { setVersion, setDescargando, setListo, setError } = useUpdateStore()
+  const [appRole, setAppRole] = useState<AppRole | null>(null)
+
+  // Rol de esta PC (caja vs gestor remoto). Determina la app entera.
+  useEffect(() => {
+    window.electronAPI.app.getRole().then(setAppRole).catch(() => setAppRole('caja'))
+  }, [])
 
   // Suscribir a eventos de sync desde el proceso main
   useEffect(() => {
@@ -93,6 +101,12 @@ export default function App() {
   }, [setVersion, setDescargando, setListo, setError])
 
   function renderContent() {
+    // Esperando saber el rol (evita parpadeo de la pantalla de caja en el gestor)
+    if (appRole === null) return null
+
+    // Gestor remoto: app aparte, solo administra productos (sin login/caja/ventas)
+    if (appRole === 'gestor') return <GestorApp />
+
     // Guard: sin usuario → pantalla de login
     if (!usuario) return <LoginPin />
 

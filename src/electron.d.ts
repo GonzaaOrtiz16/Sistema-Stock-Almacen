@@ -102,6 +102,7 @@ declare global {
         getVersion: () => Promise<string>
         getRole:    () => Promise<AppRole>
         setRole:    (r: AppRole) => Promise<AppRole>
+        relaunch:   () => Promise<void>
       }
       updater: {
         onAvailable:     (cb: (info: { version: string }) => void) => void

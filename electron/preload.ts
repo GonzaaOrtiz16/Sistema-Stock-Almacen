@@ -125,6 +125,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getVersion: ()             => ipcRenderer.invoke(IPC.APP_VERSION)        as Promise<string>,
     getRole:    ()             => ipcRenderer.invoke(IPC.APP_GET_ROLE)       as Promise<AppRole>,
     setRole:    (r: AppRole)   => ipcRenderer.invoke(IPC.APP_SET_ROLE, r)    as Promise<AppRole>,
+    relaunch:   ()             => ipcRenderer.invoke(IPC.APP_RELAUNCH)       as Promise<void>,
   },
 
   updater: {

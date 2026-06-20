@@ -74,6 +74,7 @@ export const IPC = {
   APP_VERSION:                'app:version',
   APP_GET_ROLE:               'app:get-role',
   APP_SET_ROLE:               'app:set-role',
+  APP_RELAUNCH:               'app:relaunch',
 
   // Backups
   BACKUP_EJECUTAR:            'backup:ejecutar',

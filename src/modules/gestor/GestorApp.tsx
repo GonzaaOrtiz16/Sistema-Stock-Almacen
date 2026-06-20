@@ -21,7 +21,16 @@ export default function GestorApp() {
   const [nuevo, setNuevo] = useState(false)
   const [editar, setEditar] = useState<Producto | null>(null)
   const [sumar, setSumar] = useState<Producto | null>(null)
+  const [cambiarModo, setCambiarModo] = useState(false)
+  const [cambiando, setCambiando] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
+
+  // Vuelve esta PC a modo Caja y reinicia para aplicarlo (salida del modo Gestor).
+  async function volverACaja() {
+    setCambiando(true)
+    await window.electronAPI.app.setRole('caja')
+    await window.electronAPI.app.relaunch()
+  }
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -57,6 +66,9 @@ export default function GestorApp() {
           <span className="gestor-sub">Almacén Minimercado Gabriela</span>
         </div>
         <span className={`sync-dot ${isOnline ? 'online' : 'offline'}`} title={isOnline ? 'Conectado' : 'Sin conexión — los cambios se envían cuando vuelva'} />
+        <button className="btn-ghost gestor-modo-btn" onClick={() => setCambiarModo(true)}>
+          Cambiar a modo Caja
+        </button>
         <button className="btn-primary" onClick={() => setNuevo(true)}>+ Nuevo producto</button>
       </header>
 
@@ -134,6 +146,30 @@ export default function GestorApp() {
           onSuccess={(p) => { upsertLocal(p); setSumar(null); show('Stock cargado — se aplicará en la Caja', 'success') }}
           onClose={() => setSumar(null)}
         />
+      )}
+
+      {cambiarModo && (
+        <div className="modal-overlay" onClick={() => !cambiando && setCambiarModo(false)}>
+          <div className="modal" style={{ width: 400 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Cambiar a modo Caja</h2>
+              {!cambiando && <button className="modal-close" onClick={() => setCambiarModo(false)}>×</button>}
+            </div>
+            <div className="modal-body">
+              <p style={{ lineHeight: 1.6 }}>
+                Esta PC va a pasar a <b>modo Caja</b> (vende y es la dueña de la base) y el
+                programa se va a <b>reiniciar</b> para aplicar el cambio.
+              </p>
+              <p className="promo-hint">Si querés volver al modo Gestor, lo cambiás desde Configuración → “Modo de esta PC”.</p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-ghost" onClick={() => setCambiarModo(false)} disabled={cambiando}>Cancelar</button>
+              <button className="btn-primary" onClick={volverACaja} disabled={cambiando}>
+                {cambiando ? 'Reiniciando…' : 'Cambiar y reiniciar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

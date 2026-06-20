@@ -92,6 +92,14 @@ function registerIpcHandlers(): void {
     return role
   })
 
+  // Reiniciar la app (para aplicar el cambio de modo sin que el usuario tenga
+  // que cerrar y abrir a mano). relaunch agenda el reinicio; quit cierra limpio
+  // (checkpoint de la base incluido en before-quit).
+  ipcMain.handle(IPC.APP_RELAUNCH, () => {
+    app.relaunch()
+    app.quit()
+  })
+
   // Instalar actualización cuando el renderer lo solicite
   ipcMain.on(IPC.UPDATER_INSTALL, () => installUpdate())
 }

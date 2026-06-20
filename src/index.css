@@ -562,9 +562,14 @@ kbd {
   --hist-price: #e9d5ff;
   display: flex;
   flex-direction: column;
-  flex: 1;
+  /* flex-grow para ocupar el espacio restante de la columna; min-height:0 +
+     overflow:hidden son los que permiten que .historial-list scrollee adentro.
+     (Antes tenía margin-top:auto, que se comía el espacio y dejaba al flex-grow
+     en 0 → el panel colapsaba y las ventas se amontonaban/recortaban.) */
+  flex: 1 1 0;
   min-height: 0;
-  margin-top: auto;
+  overflow: hidden;
+  margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid rgba(192,132,252,.18);
 }
@@ -1137,7 +1142,19 @@ kbd {
 }
 .promo-page-hint b { color: #c4b5fd; font-weight: 600; }
 
-.promo-list-wrap { overflow-y: auto; padding: 8px 16px 24px; }
+/* Contenedor de la sección Promociones: ocupa toda la pantalla (no reusa el
+   grid de .inv-page, que tiene filas fijas pensadas para el inventario y dejaba
+   la lista atrapada en una franja de 52px). */
+.promo-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.promo-page .inv-header { flex: 0 0 auto; }
+.promo-page .promo-page-hint { flex: 0 0 auto; }
+
+.promo-list-wrap { flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 8px 16px 24px; }
 .promo-list-count {
   font-size: 0.78rem; color: #8a7ba5; text-transform: uppercase;
   letter-spacing: 0.05em; font-weight: 700; padding: 4px 2px 12px;
@@ -1194,6 +1211,7 @@ kbd {
 /* Formulario de promoción */
 .promo-form {
   display: flex; flex-direction: column; gap: 16px;
+  flex: 1 1 0; min-height: 0;
   max-width: 640px; padding: 8px 16px 24px; overflow-y: auto;
 }
 .promo-picker { position: relative; }

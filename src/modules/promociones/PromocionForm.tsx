@@ -96,7 +96,7 @@ export default function PromocionForm({ promocion, productos, onSuccess, onClose
   }
 
   return (
-    <div className="inv-page">
+    <div className="promo-page">
       <header className="inv-header">
         <h2 className="inv-title">{promocion ? 'Editar promoción' : 'Nueva promoción'}</h2>
         <button className="btn-ghost" onClick={onClose}>← Volver</button>

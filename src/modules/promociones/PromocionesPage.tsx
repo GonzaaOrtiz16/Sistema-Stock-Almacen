@@ -74,7 +74,7 @@ export default function PromocionesPage() {
   const activas = promos.filter((p) => p.activa === 1).length
 
   return (
-    <div className="inv-page">
+    <div className="promo-page">
       <header className="inv-header">
         <h2 className="inv-title">Promociones</h2>
         <div className="inv-actions">

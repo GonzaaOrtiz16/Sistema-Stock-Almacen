@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useCartStore, selectTotal, selectSubtotal } from '../../store/cartStore'
+import { aplicarPromociones } from '@shared/types/promocion.types'
 import { useCajaStore } from '../../store/cajaStore'
 import type { MetodoPago, Venta } from '@shared/types/venta.types'
 import { formatPrecio } from '../../utils/format'
@@ -21,8 +22,11 @@ export default function PaymentModal({ onSuccess, onClose }: Props) {
   const { items, descuento, clear } = useCartStore()
   const { usuario, turnoActivo } = useCajaStore()
 
-  const subtotal = useCartStore(selectSubtotal)
-  const total    = useCartStore(selectTotal)
+  const promociones = useCartStore((s) => s.promociones)
+  const subtotal   = useCartStore(selectSubtotal)
+  const total      = useCartStore(selectTotal)
+  const promos     = useMemo(() => aplicarPromociones(items, promociones), [items, promociones])
+  const descPromos = promos.descuentoTotal
 
   const [metodo,         setMetodo]         = useState<MetodoPago>('efectivo')
   const [montoEfectivo,  setMontoEfectivo]  = useState('')
@@ -54,6 +58,9 @@ export default function PaymentModal({ onSuccess, onClose }: Props) {
           producto_id:    i.es_manual ? 0 : i.producto_id,
           cantidad:       i.cantidad,
           precio_unitario: i.precio_unitario,
+          // El ahorro de las promociones se registra como descuento de cada línea:
+          // el precio unitario queda como el normal y el descuento queda asentado.
+          descuento_item: promos.descuentoPorProducto[i.producto_id] ?? 0,
           es_manual:      i.es_manual,
         })),
         metodo_pago:    metodo,
@@ -63,12 +70,14 @@ export default function PaymentModal({ onSuccess, onClose }: Props) {
                       : undefined,
       })
 
-      // Imprimir ticket en la tiquetera (no bloquea ni revierte la venta)
+      // Imprimir ticket en la tiquetera (no bloquea ni revierte la venta).
+      // El subtotal de cada línea descuenta el ahorro de promos para que la suma
+      // de las líneas coincida con el total cobrado.
       const ticketItems = items.map((i) => ({
         nombre:          i.nombre,
         cantidad:        i.cantidad,
         precio_unitario: i.precio_unitario,
-        subtotal:        i.subtotal,
+        subtotal:        i.subtotal - (promos.descuentoPorProducto[i.producto_id] ?? 0),
       }))
       void window.electronAPI.printer
         .imprimirVenta({
@@ -108,12 +117,18 @@ export default function PaymentModal({ onSuccess, onClose }: Props) {
         <div className="modal-body">
           {/* Totales */}
           <div className="payment-totals">
-            {descuento > 0 && (
+            {(descuento > 0 || descPromos > 0) && (
               <div className="payment-row">
                 <span>Subtotal</span>
                 <span>{formatPrecio(subtotal)}</span>
               </div>
             )}
+            {promos.aplicadas.map((a) => (
+              <div key={a.promocion_id} className="payment-row discount">
+                <span>🏷️ {a.nombre}{a.veces > 1 ? ` ×${a.veces}` : ''}</span>
+                <span>− {formatPrecio(a.descuento)}</span>
+              </div>
+            ))}
             {descuento > 0 && (
               <div className="payment-row discount">
                 <span>Descuento</span>

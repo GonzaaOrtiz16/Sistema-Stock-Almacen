@@ -11,6 +11,7 @@ export interface Categoria {
 
 export interface Producto {
   id: number
+  uuid: string             // clave global estable para sincronizar entre PCs
   codigo_barras: string | null
   nombre: string
   precio_venta: number

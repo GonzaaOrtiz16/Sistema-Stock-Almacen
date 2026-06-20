@@ -6,10 +6,12 @@ import * as XLSX from 'xlsx'
 import { getDb } from '../../db/client'
 import log from '../../utils/logger'
 
-// Backup diario automático de toda la data (ventas, stock/inventario y resumen
-// de reportes). Genera dos cosas en Documentos\Almacén Gabriela\Backups\<fecha>:
+// Backup diario automático de TODA la data. Genera dos cosas en
+// Documentos\Almacén Gabriela\Backups\<fecha>:
 //   1. gabriela_<fecha>.db  → copia completa de la base (permite restaurar todo)
-//   2. almacen_<fecha>.xlsx → Excel legible (Resumen, Ventas, Inventario)
+//   2. almacen_<fecha>.xlsx → Excel legible con varias hojas:
+//        Resumen · Inventario · Balance diario · Turnos de caja · Ventas ·
+//        Detalle de ventas · Productos vendidos · Anulaciones · Usuarios
 
 const RETENTION_DAYS    = 30
 const CHECK_INTERVAL_MS  = 6 * 60 * 60 * 1000 // cada 6 h
@@ -101,7 +103,9 @@ export async function ejecutarBackup(): Promise<BackupResult> {
 }
 
 function construirExcel(db: Database.Database, destino: string): void {
-  // ── Inventario (stock actual completo) ──
+  const TZ = TZ_OFFSET_HORAS
+
+  // ── Inventario (TODOS los productos, incluso inactivos, por las dudas) ──
   const inventario = db.prepare(`
     SELECT
       p.codigo_barras                                       AS "Código",
@@ -112,19 +116,56 @@ function construirExcel(db: Database.Database, destino: string): void {
       p.precio_venta                                        AS "Precio venta",
       p.stock_actual                                        AS "Stock",
       p.stock_minimo                                        AS "Stock mínimo",
-      ROUND(COALESCE(p.precio_venta, 0) * p.stock_actual, 2) AS "Valor stock"
+      ROUND(COALESCE(p.precio_venta, 0) * p.stock_actual, 2) AS "Valor stock",
+      CASE WHEN p.activo = 1 THEN 'Sí' ELSE 'No' END        AS "Activo"
     FROM productos p
     LEFT JOIN categorias c ON c.id = p.categoria_id
-    WHERE p.activo = 1
-    ORDER BY p.nombre COLLATE NOCASE
+    ORDER BY p.activo DESC, p.nombre COLLATE NOCASE
+  `).all()
+
+  // ── Balance diario (resumen de ventas por día, con desglose por método) ──
+  const balanceDiario = db.prepare(`
+    SELECT
+      DATE(v.timestamp, '${TZ}')                                        AS "Fecha",
+      COUNT(*)                                                          AS "Ventas",
+      ROUND(SUM(v.subtotal), 2)                                         AS "Subtotal",
+      ROUND(SUM(v.descuento), 2)                                        AS "Descuentos",
+      ROUND(SUM(v.total), 2)                                            AS "Total",
+      ROUND(SUM(CASE WHEN v.metodo_pago='efectivo' THEN v.total ELSE 0 END), 2) AS "Efectivo",
+      ROUND(SUM(CASE WHEN v.metodo_pago='debito'   THEN v.total ELSE 0 END), 2) AS "Débito",
+      ROUND(SUM(CASE WHEN v.metodo_pago='credito'  THEN v.total ELSE 0 END), 2) AS "Crédito",
+      ROUND(SUM(CASE WHEN v.metodo_pago='qr'       THEN v.total ELSE 0 END), 2) AS "QR",
+      ROUND(SUM(CASE WHEN v.metodo_pago='mixto'    THEN v.total ELSE 0 END), 2) AS "Mixto"
+    FROM ventas v
+    WHERE v.estado = 'completada'
+    GROUP BY DATE(v.timestamp, '${TZ}')
+    ORDER BY DATE(v.timestamp, '${TZ}') DESC
+  `).all()
+
+  // ── Turnos de caja (arqueos: apertura/cierre y montos) ──
+  const turnos = db.prepare(`
+    SELECT
+      t.id                                    AS "N° turno",
+      u.nombre                                AS "Cajero",
+      DATE(t.apertura_ts, '${TZ}')            AS "Fecha apertura",
+      TIME(t.apertura_ts, '${TZ}')            AS "Hora apertura",
+      t.monto_apertura                        AS "Monto apertura",
+      DATE(t.cierre_ts, '${TZ}')              AS "Fecha cierre",
+      TIME(t.cierre_ts, '${TZ}')              AS "Hora cierre",
+      t.monto_cierre                          AS "Monto cierre",
+      t.estado                                AS "Estado",
+      t.observaciones                         AS "Observaciones"
+    FROM turnos_caja t
+    LEFT JOIN usuarios u ON u.id = t.usuario_id
+    ORDER BY t.apertura_ts DESC
   `).all()
 
   // ── Ventas completadas (hora local AR) ──
   const ventas = db.prepare(`
     SELECT
       v.id                                AS "N° venta",
-      DATE(v.timestamp, '${TZ_OFFSET_HORAS}') AS "Fecha",
-      TIME(v.timestamp, '${TZ_OFFSET_HORAS}') AS "Hora",
+      DATE(v.timestamp, '${TZ}')          AS "Fecha",
+      TIME(v.timestamp, '${TZ}')          AS "Hora",
       u.nombre                            AS "Cajero",
       v.metodo_pago                       AS "Método",
       v.subtotal                          AS "Subtotal",
@@ -134,6 +175,66 @@ function construirExcel(db: Database.Database, destino: string): void {
     LEFT JOIN usuarios u ON u.id = v.usuario_id
     WHERE v.estado = 'completada'
     ORDER BY v.timestamp DESC
+  `).all()
+
+  // ── Detalle de ventas (cada renglón vendido) ──
+  const detalle = db.prepare(`
+    SELECT
+      v.id                                       AS "N° venta",
+      DATE(v.timestamp, '${TZ}')                 AS "Fecha",
+      COALESCE(p.codigo_barras, '')              AS "Código",
+      COALESCE(p.nombre, '(producto eliminado)') AS "Producto",
+      dv.cantidad                                AS "Cantidad",
+      dv.precio_unitario                         AS "Precio unit.",
+      dv.descuento_item                          AS "Descuento",
+      dv.subtotal                                AS "Subtotal"
+    FROM detalle_ventas dv
+    JOIN ventas v        ON v.id = dv.venta_id
+    LEFT JOIN productos p ON p.id = dv.producto_id
+    WHERE v.estado = 'completada'
+    ORDER BY v.timestamp DESC, v.id DESC
+  `).all()
+
+  // ── Productos más vendidos (ranking histórico) ──
+  const masVendidos = db.prepare(`
+    SELECT
+      COALESCE(p.nombre, '(producto eliminado)') AS "Producto",
+      COALESCE(p.codigo_barras, '')              AS "Código",
+      ROUND(SUM(dv.cantidad), 2)                 AS "Cantidad vendida",
+      ROUND(SUM(dv.subtotal), 2)                 AS "Total vendido"
+    FROM detalle_ventas dv
+    JOIN ventas v        ON v.id = dv.venta_id
+    LEFT JOIN productos p ON p.id = dv.producto_id
+    WHERE v.estado = 'completada'
+    GROUP BY dv.producto_id
+    ORDER BY SUM(dv.cantidad) DESC
+  `).all()
+
+  // ── Anulaciones ──
+  const anulaciones = db.prepare(`
+    SELECT
+      a.id                            AS "N°",
+      a.venta_id                      AS "N° venta",
+      DATE(a.created_at, '${TZ}')     AS "Fecha",
+      TIME(a.created_at, '${TZ}')     AS "Hora",
+      u.nombre                        AS "Solicitante",
+      a.modo                          AS "Modo",
+      a.estado                        AS "Estado",
+      a.motivo                        AS "Motivo"
+    FROM anulaciones a
+    LEFT JOIN usuarios u ON u.id = a.solicitante_id
+    ORDER BY a.created_at DESC
+  `).all()
+
+  // ── Usuarios (sin el hash del PIN) ──
+  const usuarios = db.prepare(`
+    SELECT
+      nombre                       AS "Nombre",
+      rol                          AS "Rol",
+      CASE WHEN activo = 1 THEN 'Sí' ELSE 'No' END AS "Activo",
+      DATE(created_at, '${TZ}')    AS "Alta"
+    FROM usuarios
+    ORDER BY nombre COLLATE NOCASE
   `).all()
 
   // ── Resumen ──
@@ -181,9 +282,15 @@ function construirExcel(db: Database.Database, destino: string): void {
   ]
 
   const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen),       'Resumen')
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ventas),       'Ventas')
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(inventario),   'Inventario')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen),        'Resumen')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(inventario),    'Inventario')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(balanceDiario), 'Balance diario')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(turnos),        'Turnos de caja')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ventas),        'Ventas')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle),       'Detalle de ventas')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(masVendidos),   'Productos vendidos')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(anulaciones),   'Anulaciones')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(usuarios),      'Usuarios')
   // Generamos el .xlsx en memoria y lo escribimos con el fs de Node. NO usar
   // XLSX.writeFile: depende del fs interno de SheetJS, que falla con la app
   // empaquetada (asar) y tira "cannot save file".

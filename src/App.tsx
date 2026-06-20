@@ -8,6 +8,7 @@ import TurnoExistente from './modules/caja/TurnoExistente'
 import CheckoutPage from './modules/checkout/CheckoutPage'
 import ProductosPage from './modules/inventario/ProductosPage'
 import AgregarStockPage from './modules/inventario/AgregarStockPage'
+import PromocionesPage from './modules/promociones/PromocionesPage'
 import ReportesPage from './modules/reportes/ReportesPage'
 import UsuariosPage from './modules/usuarios/UsuariosPage'
 import ConfiguracionPage from './modules/config/ConfiguracionPage'
@@ -21,10 +22,11 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
   const isOnline = useSyncStore((s) => s.info.estado === 'online' || s.info.estado === 'syncing')
 
   const navItems: Array<{ page: AdminPage; label: string }> = [
-    { page: 'checkout',   label: 'Caja' },
-    { page: 'inventario', label: 'Inventario' },
-    { page: 'stock',      label: 'Ingreso Stock' },
-    { page: 'reportes',   label: 'Reportes' },
+    { page: 'checkout',    label: 'Caja' },
+    { page: 'inventario',  label: 'Inventario' },
+    { page: 'stock',       label: 'Ingreso Stock' },
+    { page: 'promociones', label: 'Promociones' },
+    { page: 'reportes',    label: 'Reportes' },
     // Gestión de usuarios solo para administradores
     ...(usuario?.rol === 'admin' ? [{ page: 'usuarios' as AdminPage, label: 'Usuarios' }] : []),
     { page: 'config',     label: 'Configuración' },
@@ -106,10 +108,11 @@ export default function App() {
     // Admin / supervisor: panel completo con barra lateral
     return (
       <AdminLayout>
-        {adminPage === 'checkout'   && <CheckoutPage />}
-        {adminPage === 'inventario' && <ProductosPage />}
-        {adminPage === 'stock'      && <AgregarStockPage />}
-        {adminPage === 'reportes'   && <ReportesPage />}
+        {adminPage === 'checkout'    && <CheckoutPage />}
+        {adminPage === 'inventario'  && <ProductosPage />}
+        {adminPage === 'stock'       && <AgregarStockPage />}
+        {adminPage === 'promociones' && <PromocionesPage />}
+        {adminPage === 'reportes'    && <ReportesPage />}
         {adminPage === 'usuarios'   && <UsuariosPage />}
         {adminPage === 'config'     && <ConfiguracionPage />}
       </AdminLayout>

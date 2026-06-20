@@ -12,6 +12,14 @@ export const IPC = {
   PRODUCTOS_PENDIENTES_AGREGAR:  'productos:pendientes-agregar',
   PRODUCTOS_PENDIENTES_ELIMINAR: 'productos:pendientes-eliminar',
 
+  // Promociones
+  PROMOCIONES_LISTAR:         'promociones:listar',
+  PROMOCIONES_LISTAR_ACTIVAS: 'promociones:listar-activas',
+  PROMOCIONES_CREAR:          'promociones:crear',
+  PROMOCIONES_ACTUALIZAR:     'promociones:actualizar',
+  PROMOCIONES_SET_ACTIVA:     'promociones:set-activa',
+  PROMOCIONES_ELIMINAR:       'promociones:eliminar',
+
   // Ventas
   VENTAS_CREAR:               'ventas:crear',
   VENTAS_LISTAR_TURNO:        'ventas:listar-turno',
@@ -57,8 +65,10 @@ export const IPC = {
   UPDATER_ERROR:              'updater:error',
   UPDATER_INSTALL:            'updater:install',
 
-  // App / versión
+  // App / versión / rol
   APP_VERSION:                'app:version',
+  APP_GET_ROLE:               'app:get-role',
+  APP_SET_ROLE:               'app:set-role',
 
   // Backups
   BACKUP_EJECUTAR:            'backup:ejecutar',

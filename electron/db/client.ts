@@ -75,6 +75,8 @@ function applyMigrations(database: Database.Database): void {
   const migrations: Array<{ name: string; sql: string }> = [
     { name: '001_initial', sql: MIGRATION_001 },
     { name: '002_pendientes_codigo', sql: MIGRATION_002 },
+    { name: '003_productos_uuid', sql: MIGRATION_003 },
+    { name: '004_promociones', sql: MIGRATION_004 },
   ]
 
   const runMigration = database.transaction((name: string, sql: string) => {
@@ -229,4 +231,41 @@ CREATE TABLE IF NOT EXISTS pendientes_codigo (
   veces         INTEGER NOT NULL DEFAULT 1,
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+`
+
+// uuid global para productos: clave estable que identifica al mismo producto en
+// las dos PC y en Supabase (los id autoincrement chocarían entre máquinas).
+// ALTER ADD COLUMN no admite default no-constante (randomblob), así que se agrega
+// la columna vacía, se rellena a todas las filas y recién ahí se hace UNIQUE.
+const MIGRATION_003 = `
+ALTER TABLE productos ADD COLUMN uuid TEXT;
+UPDATE productos SET uuid = lower(hex(randomblob(16))) WHERE uuid IS NULL OR uuid = '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_productos_uuid ON productos(uuid);
+`
+
+// Promociones (sección propia). Una promo tiene un precio final y una lista de
+// ítems (producto + cantidad). Si tiene un solo ítem es una promo de "varias
+// unidades del mismo producto"; si tiene varios, es un combo (ej: 2 cocas + 1
+// fernet a $X). En caja se aplica tantas veces como entre en el carrito.
+const MIGRATION_004 = `
+CREATE TABLE IF NOT EXISTS promociones (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  uuid        TEXT NOT NULL DEFAULT (lower(hex(randomblob(16)))),
+  nombre      TEXT NOT NULL,
+  precio      REAL NOT NULL,
+  activa      INTEGER NOT NULL DEFAULT 1,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  sync_status TEXT NOT NULL DEFAULT 'pending'
+              CHECK(sync_status IN ('pending','synced','error'))
+);
+
+CREATE TABLE IF NOT EXISTS promocion_items (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  promocion_id INTEGER NOT NULL REFERENCES promociones(id) ON DELETE CASCADE,
+  producto_id  INTEGER NOT NULL REFERENCES productos(id),
+  cantidad     REAL NOT NULL DEFAULT 1
+);
+
+CREATE INDEX IF NOT EXISTS idx_promocion_items ON promocion_items(promocion_id);
 `

@@ -1,20 +1,25 @@
 import { create } from 'zustand'
 import type { ItemCarrito } from '@shared/types/venta.types'
+import type { Promocion, ResultadoPromos } from '@shared/types/promocion.types'
+import { aplicarPromociones } from '@shared/types/promocion.types'
 
 interface CartState {
   items: ItemCarrito[]
   descuento: number
+  promociones: Promocion[]   // promos activas cargadas desde la DB (para aplicar en caja)
 
-  addItem:        (item: ItemCarrito) => void
-  updateCantidad: (producto_id: number, cantidad: number) => void
-  removeItem:     (producto_id: number) => void
-  setDescuento:   (descuento: number) => void
-  clear:          () => void
+  addItem:         (item: ItemCarrito) => void
+  updateCantidad:  (producto_id: number, cantidad: number) => void
+  removeItem:      (producto_id: number) => void
+  setDescuento:    (descuento: number) => void
+  setPromociones:  (promociones: Promocion[]) => void
+  clear:           () => void
 }
 
 export const useCartStore = create<CartState>((set) => ({
-  items:     [],
-  descuento: 0,
+  items:       [],
+  descuento:   0,
+  promociones: [],
 
   addItem(item) {
     set((s) => {
@@ -50,14 +55,27 @@ export const useCartStore = create<CartState>((set) => ({
     set((s) => ({ items: s.items.filter((i) => i.producto_id !== producto_id) }))
   },
 
-  setDescuento: (descuento) => set({ descuento }),
+  setDescuento:   (descuento)   => set({ descuento }),
+  setPromociones: (promociones) => set({ promociones }),
 
+  // Vaciar el carrito NO borra las promos cargadas (siguen vigentes para la próxima venta).
   clear: () => set({ items: [], descuento: 0 }),
 }))
 
-// Selectores derivados
+// ── Selectores derivados ─────────────────────────────────────────────────────
+
+// Subtotal bruto: suma de líneas a precio normal, sin promos ni descuento manual.
 export const selectSubtotal = (s: CartState): number =>
   s.items.reduce((acc, i) => acc + i.subtotal, 0)
 
+// Resultado del motor de promociones sobre el carrito actual.
+export const selectResultadoPromos = (s: CartState): ResultadoPromos =>
+  aplicarPromociones(s.items, s.promociones)
+
+// Ahorro total por promociones.
+export const selectDescuentoPromos = (s: CartState): number =>
+  selectResultadoPromos(s).descuentoTotal
+
+// Total a cobrar: bruto − promos − descuento manual.
 export const selectTotal = (s: CartState): number =>
-  Math.max(0, selectSubtotal(s) - s.descuento)
+  Math.max(0, selectSubtotal(s) - selectDescuentoPromos(s) - s.descuento)

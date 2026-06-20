@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Producto } from '@shared/types/producto.types'
 import { formatPrecio } from '../../utils/format'
+import { buscarProductos } from '../../utils/search'
 import ProductForm from './ProductForm'
 import BulkPriceUpdate from './BulkPriceUpdate'
 
@@ -45,17 +46,9 @@ export default function ProductosPage() {
 
   useEffect(() => { loadAll() }, [loadAll])
 
-  // ── Búsqueda en tiempo real ────────────────────────────────────────────────
+  // ── Búsqueda en tiempo real (inteligente: sin acentos, multi-palabra, ranking) ─
   useEffect(() => {
-    if (!query.trim()) { setFiltered(productos); return }
-    const q = query.toLowerCase()
-    setFiltered(
-      productos.filter(
-        (p) =>
-          p.nombre.toLowerCase().includes(q) ||
-          (p.codigo_barras ?? '').includes(q),
-      ),
-    )
+    setFiltered(buscarProductos(productos, query))
   }, [query, productos])
 
   // ── Toast ──────────────────────────────────────────────────────────────────
@@ -166,7 +159,7 @@ export default function ProductosPage() {
         <input
           ref={searchRef}
           className="search-input"
-          placeholder="Buscar por nombre o código de barras…"
+          placeholder="Buscar por nombre o código… (varias palabras, sin importar acentos ni orden)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           autoFocus

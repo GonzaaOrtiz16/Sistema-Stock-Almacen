@@ -24,9 +24,9 @@ export function createProductosRepo(db: Database.Database) {
 
   const stmtInsert = db.prepare(`
     INSERT INTO productos
-      (codigo_barras, nombre, precio_venta, precio_costo, stock_actual, stock_minimo, unidad, categoria_id)
+      (uuid, codigo_barras, nombre, precio_venta, precio_costo, stock_actual, stock_minimo, unidad, categoria_id)
     VALUES
-      (@codigo_barras, @nombre, @precio_venta, @precio_costo, @stock_actual, @stock_minimo, @unidad, @categoria_id)
+      (lower(hex(randomblob(16))), @codigo_barras, @nombre, @precio_venta, @precio_costo, @stock_actual, @stock_minimo, @unidad, @categoria_id)
   `)
 
   const stmtUpdate = db.prepare(`
@@ -60,8 +60,12 @@ export function createProductosRepo(db: Database.Database) {
     WHERE activo = 1 AND categoria_id = ?
   `)
 
+  // La venta baja el stock y marca el producto como 'pending' para que el catálogo
+  // publicado en Supabase refleje el stock actualizado (lo que ve el gestor remoto).
   const stmtDecrStock = db.prepare(
-    'UPDATE productos SET stock_actual = stock_actual - @cantidad WHERE id = @producto_id',
+    `UPDATE productos SET stock_actual = stock_actual - @cantidad,
+       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), sync_status = 'pending'
+     WHERE id = @producto_id`,
   )
 
   const stmtIncrStock = db.prepare(

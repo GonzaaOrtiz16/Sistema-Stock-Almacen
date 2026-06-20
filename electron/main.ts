@@ -1,11 +1,14 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { getDb, closeDb, checkpointDb } from './db/client'
+import { createConfigRepo } from './db/repositories/config.repo'
 import { seedIfEmpty } from './db/seed'
+import type { AppRole } from '../shared/types/app.types'
 import { SyncEngine } from './services/sync/SyncEngine'
 import { setupAutoUpdater, installUpdate } from './services/updater/AutoUpdater'
 import log from './utils/logger'
 import { registerProductosHandlers } from './ipc/productos.ipc'
+import { registerPromocionesHandlers } from './ipc/promociones.ipc'
 import { registerVentasHandlers } from './ipc/ventas.ipc'
 import { registerCajaHandlers } from './ipc/caja.ipc'
 import { registerUsuariosHandlers } from './ipc/usuarios.ipc'
@@ -67,6 +70,7 @@ function createWindow(): void {
 
 function registerIpcHandlers(): void {
   registerProductosHandlers()
+  registerPromocionesHandlers()
   registerVentasHandlers()
   registerCajaHandlers()
   registerUsuariosHandlers()
@@ -77,6 +81,14 @@ function registerIpcHandlers(): void {
 
   // Versión actual de la app (para mostrarla en la interfaz)
   ipcMain.handle(IPC.APP_VERSION, () => app.getVersion())
+
+  // Rol de esta PC (caja vs gestor remoto)
+  const configRepo = createConfigRepo(getDb())
+  ipcMain.handle(IPC.APP_GET_ROLE, () => configRepo.getRole())
+  ipcMain.handle(IPC.APP_SET_ROLE, (_e, role: AppRole) => {
+    configRepo.setRole(role)
+    return role
+  })
 
   // Instalar actualización cuando el renderer lo solicite
   ipcMain.on(IPC.UPDATER_INSTALL, () => installUpdate())

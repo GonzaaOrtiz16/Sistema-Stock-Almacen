@@ -137,9 +137,9 @@ export function registerProductosHandlers(): void {
 
       const insert = db.prepare(`
         INSERT INTO productos
-          (codigo_barras, nombre, precio_venta, precio_costo, stock_actual, stock_minimo, unidad, categoria_id)
+          (uuid, codigo_barras, nombre, precio_venta, precio_costo, stock_actual, stock_minimo, unidad, categoria_id)
         VALUES
-          (@barcode, @nombre, @precio, NULL, @stock, 0, 'unidad', NULL)
+          (lower(hex(randomblob(16))), @barcode, @nombre, @precio, NULL, @stock, 0, 'unidad', NULL)
       `)
 
       let importados = 0

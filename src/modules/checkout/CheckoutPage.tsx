@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useCartStore, selectSubtotal, selectTotal } from '../../store/cartStore'
+import { aplicarPromociones } from '@shared/types/promocion.types'
 import { useCajaStore } from '../../store/cajaStore'
 import { useBarcode } from '../../hooks/useBarcode'
 import { useToast } from '../../components/ui'
@@ -11,15 +12,21 @@ import AnulacionModal from './AnulacionModal'
 import MontoManualModal from './MontoManualModal'
 import PrecioProductoModal from './PrecioProductoModal'
 import AltaRapidaModal from './AltaRapidaModal'
+import VentaDetalleModal from './VentaDetalleModal'
 import CierreCaja from '../caja/CierreCaja'
 import UsuarioForm from '../usuarios/UsuarioForm'
 import { formatPrecio, formatHora } from '../../utils/format'
 
 export default function CheckoutPage() {
-  const { items, addItem, updateCantidad, removeItem, clear } = useCartStore()
+  const { items, addItem, updateCantidad, removeItem, clear, setPromociones } = useCartStore()
+  const promociones = useCartStore((s) => s.promociones)
   const { usuario, turnoActivo, setUsuario } = useCajaStore()
   const subtotal = useCartStore(selectSubtotal)
   const total    = useCartStore(selectTotal)
+  // Resultado de las promos memoizado: aplicarPromociones devuelve un objeto nuevo
+  // en cada llamada, así que no debe usarse como selector de zustand directo.
+  const promosResult = useMemo(() => aplicarPromociones(items, promociones), [items, promociones])
+  const descPromos   = promosResult.descuentoTotal
   const { show } = useToast()
 
   const [query,        setQuery]        = useState('')
@@ -33,7 +40,7 @@ export default function CheckoutPage() {
   const [altaCodigo,   setAltaCodigo]   = useState<string | null>(null)
   const [anularVenta,  setAnularVenta]  = useState<Venta | null>(null)
   const [historial,    setHistorial]    = useState<Venta[]>([])
-  const [expandido,    setExpandido]    = useState<number | null>(null)
+  const [ventaDetalle, setVentaDetalle] = useState<Venta | null>(null)
   const [detalles,     setDetalles]     = useState<Record<number, LineaVenta[]>>({})
   const [filtroMonto,  setFiltroMonto]  = useState('')
   const [soloAnuladas, setSoloAnuladas] = useState(false)
@@ -52,14 +59,10 @@ export default function CheckoutPage() {
 
   useEffect(() => { refreshHistorial() }, [refreshHistorial])
 
-  // Expande/colapsa el desglose de productos de una venta (carga perezosa + cache)
-  const toggleDetalle = useCallback(async (ventaId: number) => {
-    setExpandido((prev) => (prev === ventaId ? null : ventaId))
-    if (detalles[ventaId] === undefined) {
-      const lineas = await window.electronAPI.ventas.detalle(ventaId)
-      setDetalles((prev) => ({ ...prev, [ventaId]: lineas }))
-    }
-  }, [detalles])
+  // Cachea el desglose de una venta cuando el modal de detalle lo carga (para reusarlo).
+  const cacheDetalle = useCallback((ventaId: number, lineas: LineaVenta[]) => {
+    setDetalles((prev) => ({ ...prev, [ventaId]: lineas }))
+  }, [])
 
   // Reimpresión manual del ticket (no depende del flag de auto-impresión)
   const handleReimprimir = useCallback(async (v: Venta) => {
@@ -100,6 +103,11 @@ export default function CheckoutPage() {
   useEffect(() => {
     window.electronAPI.productos.pendientesListar().then(setPendientes)
   }, [])
+
+  // ── Promociones activas (para aplicarlas al carrito) ───────────────────────
+  useEffect(() => {
+    window.electronAPI.promociones.listarActivas().then(setPromociones).catch(() => {})
+  }, [setPromociones])
 
   // ── Barcode scanner ────────────────────────────────────────────────────────
   const handleScan = useCallback(async (barcode: string) => {
@@ -191,7 +199,7 @@ export default function CheckoutPage() {
       const tag = (document.activeElement as HTMLElement)?.tagName.toLowerCase()
       const inInput = tag === 'input' || tag === 'textarea'
 
-      const modalAbierto = showPayment || anularVenta || showManual || precioPend || altaCodigo || showPerfil
+      const modalAbierto = showPayment || anularVenta || showManual || precioPend || altaCodigo || showPerfil || ventaDetalle
 
       // F1: cobrar (siempre activo salvo en inputs)
       if (e.key === 'F1') {
@@ -214,6 +222,7 @@ export default function CheckoutPage() {
         if (precioPend)   { setPrecioPend(null);    return }
         if (altaCodigo)   { setAltaCodigo(null);    return }
         if (showPerfil)   { setShowPerfil(false);   return }
+        if (ventaDetalle) { setVentaDetalle(null);  return }
         if (anularVenta)  { setAnularVenta(null);   return }
         if (results.length || query) { setQuery(''); setResults([]); return }
         setSelectedIdx(null)
@@ -261,7 +270,7 @@ export default function CheckoutPage() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [items, selectedIdx, showPayment, showManual, precioPend, altaCodigo, showPerfil, anularVenta, query, results.length, updateCantidad, removeItem])
+  }, [items, selectedIdx, showPayment, showManual, precioPend, altaCodigo, showPerfil, anularVenta, ventaDetalle, query, results.length, updateCantidad, removeItem])
 
   if (showCierre) return <CierreCaja onCancel={() => setShowCierre(false)} />
 
@@ -317,11 +326,19 @@ export default function CheckoutPage() {
 
           <div className="cart-footer">
             <div className="cart-totals">
-              {useCartStore.getState().descuento > 0 && (
+              {(descPromos > 0 || useCartStore.getState().descuento > 0) && (
                 <div className="total-row total-sub">
                   <span>Subtotal</span><span>{formatPrecio(subtotal)}</span>
                 </div>
               )}
+              {promosResult.aplicadas.map((a) => (
+                <div key={a.promocion_id} className="total-row total-promo">
+                  <span className="promo-aplicada-nombre">
+                    🏷️ {a.nombre}{a.veces > 1 ? ` ×${a.veces}` : ''}
+                  </span>
+                  <span>− {formatPrecio(a.descuento)}</span>
+                </div>
+              ))}
               <div className="total-row">
                 <span>TOTAL</span>
                 <span className="total-amount">{formatPrecio(total)}</span>
@@ -439,15 +456,12 @@ export default function CheckoutPage() {
                 <p className="historial-empty">Ninguna venta coincide con el filtro</p>
               ) : (
                 historialFiltrado.map((v) => {
-                  const anulada  = v.estado === 'anulada'
-                  const abierto  = expandido === v.id
-                  const lineas   = detalles[v.id]
-                  const esEfectivo = v.metodo_pago === 'efectivo'
+                  const anulada = v.estado === 'anulada'
                   return (
                     <div key={v.id} className={`historial-item${anulada ? ' anulada' : ''}`}>
                       <button
-                        className={`historial-row${abierto ? ' abierto' : ''}`}
-                        onClick={() => toggleDetalle(v.id)}
+                        className="historial-row"
+                        onClick={() => setVentaDetalle(v)}
                       >
                         <div className="historial-item-main">
                           <span className="historial-hora">{formatHora(v.timestamp)}</span>
@@ -462,63 +476,8 @@ export default function CheckoutPage() {
                         </div>
                         {anulada && <span className="historial-badge">Anulada</span>}
                         <span className="historial-total">{formatPrecio(v.total)}</span>
-                        <span className="historial-chevron">{abierto ? '▴' : '▾'}</span>
+                        <span className="historial-chevron">›</span>
                       </button>
-
-                      {abierto && (
-                        <div className="historial-detalle">
-                          {lineas === undefined ? (
-                            <p className="detalle-cargando">Cargando…</p>
-                          ) : (
-                            <>
-                              {lineas.map((l) => (
-                                <div key={l.producto_id} className="detalle-linea">
-                                  <span className="detalle-cant">{l.cantidad}×</span>
-                                  <span className="detalle-nombre">{l.nombre}</span>
-                                  <span className="detalle-unit">{formatPrecio(l.precio_unitario)}</span>
-                                  <span className="detalle-sub">{formatPrecio(l.subtotal)}</span>
-                                </div>
-                              ))}
-
-                              <div className="detalle-pago">
-                                <div className="detalle-pago-row">
-                                  <span>Total</span>
-                                  <span>{formatPrecio(v.total)}</span>
-                                </div>
-                                {esEfectivo && v.monto_recibido != null && (
-                                  <>
-                                    <div className="detalle-pago-row">
-                                      <span>Recibido</span>
-                                      <span>{formatPrecio(v.monto_recibido)}</span>
-                                    </div>
-                                    <div className="detalle-pago-row">
-                                      <span>Vuelto</span>
-                                      <span>{formatPrecio(v.vuelto ?? 0)}</span>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-
-                              <div className="detalle-acciones">
-                                <button
-                                  className="historial-info"
-                                  onClick={() => handleReimprimir(v)}
-                                >
-                                  🖨  Reimprimir
-                                </button>
-                                {!anulada && (
-                                  <button
-                                    className="historial-anular"
-                                    onClick={() => setAnularVenta(v)}
-                                  >
-                                    ✕  Anular
-                                  </button>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      )}
                     </div>
                   )
                 })
@@ -574,6 +533,17 @@ export default function CheckoutPage() {
             show('Perfil actualizado', 'success')
           }}
           onClose={() => setShowPerfil(false)}
+        />
+      )}
+
+      {ventaDetalle && (
+        <VentaDetalleModal
+          venta={ventaDetalle}
+          cacheLineas={detalles[ventaDetalle.id]}
+          onLoaded={cacheDetalle}
+          onReimprimir={handleReimprimir}
+          onAnular={(v) => { setVentaDetalle(null); setAnularVenta(v) }}
+          onClose={() => setVentaDetalle(null)}
         />
       )}
 

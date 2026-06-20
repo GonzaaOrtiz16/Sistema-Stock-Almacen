@@ -1,76 +1,117 @@
 import { BrowserWindow } from 'electron'
-import { IPC, SYNC_INTERVAL_MS } from '../../../shared/constants'
+import { IPC, SYNC_INTERVAL_MS, SYNC_BATCH_SIZE } from '../../../shared/constants'
 import type { SyncInfo } from '../../../shared/types/sync.types'
-import { NetWatcher } from './NetWatcher'
-import { PushWorker } from './PushWorker'
-import { BackupWorker } from './BackupWorker'
+import type { AppRole } from '../../../shared/types/app.types'
+import { getDb } from '../../db/client'
+import { createConfigRepo } from '../../db/repositories/config.repo'
+import { getSupabase } from '../supabase'
+import { CatalogPushWorker } from './CatalogPushWorker'
 import log from '../../utils/logger'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TODO Fase 4 — Implementación completa del SyncEngine
-//
-// Para activar el sync con Supabase:
-// 1. Crear .env con VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY
-// 2. En start(): inicializar createClient(@supabase/supabase-js) con esas variables
-// 3. Conectar NetWatcher para detectar conectividad (cada 10s)
-// 4. Cuando hay red: lanzar ciclos de PushWorker cada SYNC_INTERVAL_MS
-// 5. Notificar al renderer vía notifyRenderer() con SYNC_ONLINE / SYNC_OFFLINE
-// 6. En forceSync(): forzar un ciclo inmediato
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Orquesta la sincronización de productos por Supabase. Según el rol:
+//  · caja   → publica su catálogo (CatalogPushWorker) y (Etapa 5) ejecuta órdenes.
+//  · gestor → (Etapa 3) baja el catálogo y (Etapa 4) empuja sus órdenes.
+// Corre un ciclo al arrancar y después cada SYNC_INTERVAL_MS.
 export class SyncEngine {
   private status: SyncInfo = { estado: 'idle', ultimo_sync: null, pendientes: 0 }
-  private syncTimer: NodeJS.Timeout | null = null
-  readonly netWatcher = new NetWatcher()
-  readonly pushWorker = new PushWorker()
-  readonly backupWorker = new BackupWorker()
+  private timer: NodeJS.Timeout | null = null
+  private running = false
+  private role: AppRole = 'caja'
+  private catalogPush: CatalogPushWorker | null = null
 
   start(): void {
-    const url = process.env.VITE_SUPABASE_URL
-    if (!url) {
-      log.warn('[SyncEngine] VITE_SUPABASE_URL no configurado — sync deshabilitado')
-      log.warn('[SyncEngine] Completar .env para habilitar sincronización con Supabase')
+    const sb = getSupabase()
+    if (!sb) {
+      log.warn('[SyncEngine] Supabase no configurado (faltan credenciales) — sync deshabilitado')
       return
     }
 
-    log.info(`[SyncEngine] Iniciando con intervalo ${SYNC_INTERVAL_MS}ms`)
-    this.netWatcher.start()
+    this.role = createConfigRepo(getDb()).getRole()
+    this.catalogPush = new CatalogPushWorker(sb)
+    log.info(`[SyncEngine] Iniciando (rol=${this.role}, intervalo ${SYNC_INTERVAL_MS}ms)`)
 
-    // TODO: suscribirse a eventos online/offline del NetWatcher
-    // this.netWatcher.on('online', () => this.onOnline())
-    // this.netWatcher.on('offline', () => this.onOffline())
+    void this.tick()
+    this.timer = setInterval(() => void this.tick(), SYNC_INTERVAL_MS)
   }
 
   stop(): void {
-    if (this.syncTimer) clearInterval(this.syncTimer)
-    this.syncTimer = null
-    this.netWatcher.stop()
+    if (this.timer) { clearInterval(this.timer); this.timer = null }
     log.info('[SyncEngine] Detenido')
   }
 
   async forceSync(): Promise<void> {
-    if (!process.env.VITE_SUPABASE_URL) return
-    log.debug('[SyncEngine] forceSync — pendiente implementación Fase 4')
+    await this.tick()
   }
 
   getStatus(): SyncInfo {
     return { ...this.status }
   }
 
-  private notifyRenderer(channel: string, payload?: unknown): void {
-    BrowserWindow.getAllWindows().forEach(win => {
-      if (!win.isDestroyed()) win.webContents.send(channel, payload)
+  // ── Ciclo de sincronización ────────────────────────────────────────────────
+  private async tick(): Promise<void> {
+    if (this.running || !this.catalogPush) return
+    this.running = true
+    try {
+      this.setSyncing()
+
+      if (this.role === 'caja') {
+        // Drenamos por lotes: si un lote vino lleno, quedan más por subir.
+        let subidos: number
+        do {
+          subidos = await this.catalogPush.push()
+        } while (subidos >= SYNC_BATCH_SIZE)
+        // Etapa 5: await this.opsExecutor.run()
+      }
+      // Etapas 3/4 (gestor): bajar catálogo + empujar órdenes.
+
+      this.setOnline()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      log.error('[SyncEngine] Error en ciclo de sync:', msg)
+      this.setOffline(msg)
+    } finally {
+      this.running = false
+    }
+  }
+
+  private countPendientes(): number {
+    try {
+      const row = getDb()
+        .prepare("SELECT COUNT(*) AS n FROM productos WHERE sync_status = 'pending'")
+        .get() as { n: number }
+      return row.n
+    } catch {
+      return 0
+    }
+  }
+
+  // ── Estado + notificación al renderer (puntito online/offline) ──────────────
+  private setSyncing(): void {
+    this.status = { ...this.status, estado: 'syncing' }
+    this.notify(IPC.SYNC_PROGRESS, {
+      tabla: 'productos',
+      total: this.countPendientes(),
+      synced: 0,
     })
   }
 
-  // Métodos listos para usar cuando se implemente Fase 4
   private setOnline(): void {
-    this.status = { ...this.status, estado: 'online' }
-    this.notifyRenderer(IPC.SYNC_ONLINE)
+    this.status = {
+      estado: 'online',
+      ultimo_sync: new Date().toISOString(),
+      pendientes: this.countPendientes(),
+    }
+    this.notify(IPC.SYNC_ONLINE)
   }
 
-  private setOffline(): void {
-    this.status = { ...this.status, estado: 'offline' }
-    this.notifyRenderer(IPC.SYNC_OFFLINE)
+  private setOffline(error?: string): void {
+    this.status = { ...this.status, estado: 'offline', error }
+    this.notify(IPC.SYNC_OFFLINE)
+  }
+
+  private notify(channel: string, payload?: unknown): void {
+    BrowserWindow.getAllWindows().forEach((w) => {
+      if (!w.isDestroyed()) w.webContents.send(channel, payload)
+    })
   }
 }

@@ -4,12 +4,16 @@ import type {
   Producto, ProductoCreateInput, ProductoUpdateInput, ActualizacionMasiva, PendienteCodigo,
 } from '../shared/types/producto.types'
 import type {
+  Promocion, PromocionCreateInput, PromocionUpdateInput,
+} from '../shared/types/promocion.types'
+import type {
   Venta, TurnoCaja, Usuario, CrearVentaInput,
   AnulacionRequest, AnulacionLocal, ResumenTurno, LineaVenta,
   UsuarioCreateInput, UsuarioUpdateInput,
 } from '../shared/types/venta.types'
 import type { SyncInfo, SyncProgress } from '../shared/types/sync.types'
 import type { ResumenPeriodo, VentaDiaria, TopProducto } from '../shared/types/reporte.types'
+import type { AppRole } from '../shared/types/app.types'
 
 contextBridge.exposeInMainWorld('electronAPI', {
 
@@ -25,6 +29,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     pendientesListar:   ()             => ipcRenderer.invoke(IPC.PRODUCTOS_PENDIENTES_LISTAR)          as Promise<PendienteCodigo[]>,
     pendientesAgregar:  (c: string)    => ipcRenderer.invoke(IPC.PRODUCTOS_PENDIENTES_AGREGAR,  c)    as Promise<PendienteCodigo[]>,
     pendientesEliminar: (c: string)    => ipcRenderer.invoke(IPC.PRODUCTOS_PENDIENTES_ELIMINAR, c)    as Promise<PendienteCodigo[]>,
+  },
+
+  promociones: {
+    listar:        ()                          => ipcRenderer.invoke(IPC.PROMOCIONES_LISTAR)              as Promise<Promocion[]>,
+    listarActivas: ()                          => ipcRenderer.invoke(IPC.PROMOCIONES_LISTAR_ACTIVAS)      as Promise<Promocion[]>,
+    crear:         (i: PromocionCreateInput)   => ipcRenderer.invoke(IPC.PROMOCIONES_CREAR,      i)       as Promise<Promocion>,
+    actualizar:    (i: PromocionUpdateInput)   => ipcRenderer.invoke(IPC.PROMOCIONES_ACTUALIZAR, i)       as Promise<Promocion>,
+    setActiva:     (id: number, activa: boolean) => ipcRenderer.invoke(IPC.PROMOCIONES_SET_ACTIVA, id, activa) as Promise<Promocion>,
+    eliminar:      (id: number)                => ipcRenderer.invoke(IPC.PROMOCIONES_ELIMINAR,   id)      as Promise<boolean>,
   },
 
   ventas: {
@@ -102,7 +115,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   app: {
-    getVersion: () => ipcRenderer.invoke(IPC.APP_VERSION) as Promise<string>,
+    getVersion: ()             => ipcRenderer.invoke(IPC.APP_VERSION)        as Promise<string>,
+    getRole:    ()             => ipcRenderer.invoke(IPC.APP_GET_ROLE)       as Promise<AppRole>,
+    setRole:    (r: AppRole)   => ipcRenderer.invoke(IPC.APP_SET_ROLE, r)    as Promise<AppRole>,
   },
 
   updater: {

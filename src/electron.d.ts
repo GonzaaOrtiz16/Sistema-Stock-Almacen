@@ -2,6 +2,9 @@ import type {
   Producto, ProductoCreateInput, ProductoUpdateInput, ActualizacionMasiva, PendienteCodigo,
 } from '../shared/types/producto.types'
 import type {
+  Promocion, PromocionCreateInput, PromocionUpdateInput,
+} from '../shared/types/promocion.types'
+import type {
   Venta, TurnoCaja, Usuario, CrearVentaInput,
   AnulacionRequest, AnulacionLocal, ResumenTurno, LineaVenta,
   UsuarioCreateInput, UsuarioUpdateInput,
@@ -9,6 +12,7 @@ import type {
 import type { SyncInfo, SyncProgress } from '../shared/types/sync.types'
 import type { ResumenPeriodo, VentaDiaria, TopProducto } from '../shared/types/reporte.types'
 import type { PrinterConfig, ImpresoraInfo, TicketData, PrintResult } from '../shared/types/printer.types'
+import type { AppRole } from '../shared/types/app.types'
 
 declare global {
   interface Window {
@@ -25,6 +29,14 @@ declare global {
         pendientesListar:   ()           => Promise<PendienteCodigo[]>
         pendientesAgregar:  (c: string)  => Promise<PendienteCodigo[]>
         pendientesEliminar: (c: string)  => Promise<PendienteCodigo[]>
+      }
+      promociones: {
+        listar:        ()                            => Promise<Promocion[]>
+        listarActivas: ()                            => Promise<Promocion[]>
+        crear:         (i: PromocionCreateInput)     => Promise<Promocion>
+        actualizar:    (i: PromocionUpdateInput)     => Promise<Promocion>
+        setActiva:     (id: number, activa: boolean) => Promise<Promocion>
+        eliminar:      (id: number)                  => Promise<boolean>
       }
       ventas: {
         crear:          (i: CrearVentaInput)    => Promise<Venta>
@@ -82,6 +94,8 @@ declare global {
       }
       app: {
         getVersion: () => Promise<string>
+        getRole:    () => Promise<AppRole>
+        setRole:    (r: AppRole) => Promise<AppRole>
       }
       updater: {
         onAvailable:     (cb: (info: { version: string }) => void) => void

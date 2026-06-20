@@ -88,9 +88,9 @@ export interface ItemCarrito {
   codigo_barras: string | null
   nombre: string
   cantidad: number
-  precio_unitario: number
-  subtotal: number
-  es_manual?: boolean   // monto cargado a mano (producto sin código de barras)
+  precio_unitario: number   // precio base (normal) por unidad
+  subtotal: number          // cantidad × precio_unitario (sin promos; las promos se calculan a nivel carrito)
+  es_manual?: boolean       // monto cargado a mano (producto sin código de barras)
 }
 
 export interface CrearVentaInput {

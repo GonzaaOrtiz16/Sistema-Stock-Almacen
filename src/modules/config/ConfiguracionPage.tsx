@@ -7,6 +7,7 @@ import {
   type ImpresoraInfo,
   type AnchoPapel,
 } from '../../../shared/types/printer.types'
+import type { AppRole } from '../../../shared/types/app.types'
 
 export default function ConfiguracionPage() {
   const { show } = useToast()
@@ -17,18 +18,30 @@ export default function ConfiguracionPage() {
   const [probando, setProbando] = useState(false)
   const [importando, setImportando] = useState(false)
   const [backupeando, setBackupeando] = useState(false)
+  const [rol, setRol] = useState<AppRole>('caja')
+  const [rolGuardado, setRolGuardado] = useState<AppRole>('caja')
 
   useEffect(() => {
     ;(async () => {
-      const [cfgRes, listRes] = await Promise.all([
+      const [cfgRes, listRes, rolActual] = await Promise.all([
         window.electronAPI.printer.getConfig(),
         window.electronAPI.printer.listar(),
+        window.electronAPI.app.getRole(),
       ])
       if (cfgRes.ok && cfgRes.data) setConfig(cfgRes.data)
       if (listRes.ok && listRes.data) setImpresoras(listRes.data)
+      setRol(rolActual)
+      setRolGuardado(rolActual)
       setLoading(false)
     })()
   }, [])
+
+  async function guardarRol(nuevo: AppRole) {
+    setRol(nuevo)
+    await window.electronAPI.app.setRole(nuevo)
+    setRolGuardado(nuevo)
+    show('Modo guardado. Reiniciá la app para aplicar el cambio.', 'success')
+  }
 
   function setNegocio<K extends keyof PrinterConfig['negocio']>(
     key: K,
@@ -81,7 +94,42 @@ export default function ConfiguracionPage() {
 
   return (
     <div className="config-page">
-      <h1 className="page-title">Configuración de impresión</h1>
+      <h1 className="page-title">Configuración</h1>
+
+      <section className="config-section">
+        <h2>Modo de esta PC</h2>
+        <p className="config-hint" style={{ marginBottom: 12 }}>
+          Definí qué hace esta computadora. La <strong>Caja</strong> es la dueña del catálogo
+          y el stock: vende y recibe los cambios. El <strong>Gestor remoto</strong> es una PC
+          aparte que <strong>solo agrega productos y carga stock</strong> (no vende); sus
+          cambios se envían y se aplican en la Caja por internet.
+        </p>
+
+        <div className="config-field">
+          <label className="config-check">
+            <input
+              type="radio"
+              name="app-role"
+              checked={rol === 'caja'}
+              onChange={() => guardarRol('caja')}
+            />
+            Caja (esta PC vende y es la dueña de la base)
+          </label>
+          <label className="config-check">
+            <input
+              type="radio"
+              name="app-role"
+              checked={rol === 'gestor'}
+              onChange={() => guardarRol('gestor')}
+            />
+            Gestor remoto (solo cargar/agregar productos, no vende)
+          </label>
+        </div>
+
+        {rol !== rolGuardado && (
+          <small className="config-hint">Reiniciá la app para aplicar el modo nuevo.</small>
+        )}
+      </section>
 
       <section className="config-section">
         <h2>Inventario</h2>
@@ -100,8 +148,10 @@ export default function ConfiguracionPage() {
         <h2>Copias de seguridad</h2>
         <p className="config-hint" style={{ marginBottom: 12 }}>
           Todos los días, al abrir el almacén, se guarda automáticamente una copia de
-          toda la data (ventas, stock e inventario) en <strong>Documentos\Almacén Gabriela\Backups</strong>:
-          la base completa (para restaurar) y un Excel legible con Resumen, Ventas e Inventario.
+          toda la data en <strong>Documentos\Almacén Gabriela\Backups</strong>:
+          la base completa (para restaurar) y un Excel con todo: Resumen, Inventario
+          (con código y stock), Balance diario, Turnos de caja, Ventas, Detalle de ventas,
+          Productos vendidos, Anulaciones y Usuarios.
           Se conservan los últimos 30 días. Podés generar una copia manual cuando quieras:
         </p>
         <button className="btn-ghost" onClick={hacerBackup} disabled={backupeando}>
